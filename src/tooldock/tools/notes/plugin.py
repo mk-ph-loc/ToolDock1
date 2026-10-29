@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from datetime import datetime
 
-from PySide6.QtCore import QEvent, Qt
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QPlainTextEdit, QPushButton,
                                QVBoxLayout, QWidget)
@@ -30,16 +30,12 @@ class _Box(QPlainTextEdit):
 class NotesPlugin(Plugin):
     name, icon = "notes", "📝"
 
-    def __init__(self, ctx) -> None:
-        super().__init__(ctx)
-        self._boxes: list[tuple[_Box, QComboBox | None]] = []
-
     def build_widget(self, mode: str) -> QWidget:
         w = QWidget()
         lay = QVBoxLayout(w)
         lay.setContentsMargins(4, 4, 4, 4)
-        box = _Box(lambda: self.submit(box, combo))
         combo: QComboBox | None = None
+        box = _Box(lambda: self.submit(box, combo))
         row = QHBoxLayout()
         if mode == "full":
             combo = QComboBox()
@@ -47,13 +43,13 @@ class NotesPlugin(Plugin):
             combo.addItems(self.ctx.cfg.get("notes.topics", []))
             combo.setCurrentText(self.ctx.cfg.get("notes.default_topic", ""))
             row.addWidget(combo, 1)
+        else:
+            row.addStretch(1)
         ok = QPushButton("OK")
         ok.clicked.connect(lambda: self.submit(box, combo))
-        row.addStretch(1) if combo is None else None
         row.addWidget(ok)
         lay.addWidget(box, 1)
         lay.addLayout(row)
-        self._boxes.append((box, combo))
         return w
 
     def submit(self, box: QPlainTextEdit, combo: QComboBox | None) -> None:
@@ -64,9 +60,11 @@ class NotesPlugin(Plugin):
         topic = combo.currentText() if combo else cfg.get("notes.default_topic", "")
         if cfg.get("notes.copy_to_clipboard", True):
             QGuiApplication.clipboard().setText(text.strip())
-        written = self.ctx.storage.save_note(text, topic, datetime.now())
+        now = datetime.now()
+        written = self.ctx.storage.save_note(text, topic, now)
         self.ctx.events.note_saved.emit(topic)
-        self.ctx.events.status.emit("Αποθηκεύτηκε: " + (", ".join(p.name for p in written) or "μόνο clipboard"))
+        names = ", ".join(p.name for p in written) or "μόνο clipboard"
+        self.ctx.events.status.emit(f"Αποθηκεύτηκε: {names} · {now:%Y-%m-%d %H:%M}")
         if cfg.get("notes.clear_after_ok", True):
             box.clear()
 

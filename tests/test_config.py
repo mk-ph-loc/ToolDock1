@@ -26,9 +26,9 @@ def test_bad_json_recovers(tmp_path):
 
 def test_set_get_save_roundtrip(tmp_path):
     c = Config(tmp_path).load()
-    c.set("ui.dock.thickness", 500)
+    c.set("ui.dock.margin_start", 500)
     c.save()
-    assert Config(tmp_path).load().get("ui.dock.thickness") == 500
+    assert Config(tmp_path).load().get("ui.dock.margin_start") == 500
 
 
 def test_example_file_used(tmp_path):
