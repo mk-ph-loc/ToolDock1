@@ -1,12 +1,12 @@
-"""Υπαγόρευση: κουμπί 🎤, ηχογράφηση, πάροχοι STT, κείμενο στο πλαίσιο, el/en, κατάσταση."""
+"""Υπαγόρευση με worker και επιλογή συσκευής εισόδου."""
 from __future__ import annotations
 
+import copy
 import logging
 import threading
 
-from PySide6.QtCore import QObject, QThread, Signal
-from PySide6.QtWidgets import (QComboBox, QHBoxLayout, QLabel, QPlainTextEdit, QPushButton,
-                               QVBoxLayout, QWidget)
+from PySide6.QtCore import QObject, QThread, Signal, Slot
+from PySide6.QtWidgets import QApplication, QComboBox, QHBoxLayout, QLabel, QPlainTextEdit, QVBoxLayout, QWidget
 
 from tooldock.speech.base import SttError
 from tooldock.speech.recorder import available as mic_available, record
@@ -18,44 +18,59 @@ log = logging.getLogger("tooldock.dictation")
 
 
 class _Worker(QObject):
-    """Ηχογράφηση + αναγνώριση σε worker thread. Δεν αγγίζει UI."""
     state = Signal(str)
     result = Signal(str, str)
     error = Signal(str)
-    level = Signal(float)
+    finished = Signal()
 
-    def __init__(self, cfg) -> None:
+    def __init__(self, cfg, service: SpeechService) -> None:
         super().__init__()
-        self.cfg = cfg
+        self.cfg, self.service = cfg, service
         self.stop = threading.Event()
 
+    @Slot()
     def run(self) -> None:
         try:
             s = self.cfg.get("speech.silence", {})
-            d = SilenceDetector(s.get("threshold", 500), s.get("stop_after_s", 1.5),
-                                s.get("no_speech_timeout_s", 6.0), s.get("max_s", 60.0),
-                                int(self.cfg.get("speech.sample_rate", 16000)),
-                                bool(s.get("enabled", True)))
-            audio, why = record(self.stop, d, int(self.cfg.get("speech.sample_rate", 16000)),
-                                str(self.cfg.get("speech.device", "")), self.level.emit)
-            if not audio.pcm:
-                self.state.emit("done")
-                self.error.emit("Δεν ακούστηκε ήχος.")
+            rate = int(self.cfg.get("speech.sample_rate", 16000))
+            detector = SilenceDetector(s.get("threshold", 500), s.get("stop_after_s", 1.5),
+                                       s.get("no_speech_timeout_s", 6.0), s.get("max_s", 60.0),
+                                       rate, bool(s.get("enabled", True)))
+            audio, reason = record(self.stop, detector, rate, str(self.cfg.get("speech.device", "")))
+            if not audio.pcm or reason == "no_speech":
+                self.result.emit("", "")
                 return
-            self.state.emit("transcribing")
-            service = SpeechService(self.cfg)
-            text, provider = service.transcribe(
+            text, provider = self.service.transcribe(
                 audio, str(self.cfg.get("speech.lang", "el")),
-                on_try=lambda n: self.state.emit(f"transcribing:{n}"))
-            self.state.emit("done")
-            self.result.emit(text, provider if text else why)
+                on_try=lambda name: self.state.emit(f"Αναγνώριση… ({name})"))
+            self.result.emit(text, provider)
         except SttError as exc:
-            self.state.emit("done")
             self.error.emit(str(exc))
-        except Exception:  # ΠΡΟΣΟΧΗ: απρόσμενο σφάλμα δεν πρέπει να κλείνει την εφαρμογή
+        except Exception:
             log.exception("Σφάλμα υπαγόρευσης")
-            self.state.emit("done")
-            self.error.emit("Απρόσμενο σφάλμα (δες logs).")
+            self.error.emit("Σφάλμα υπαγόρευσης (δες logs).")
+        finally:
+            # ΠΡΟΣΟΧΗ: εκπέμπεται πάντα, ακόμη και μετά από σφάλμα ή πρόωρο return.
+            self.finished.emit()
+
+
+class _Bridge(QObject):
+    """Δρομολόγηση αποτελεσμάτων στο νήμα GUI, όχι στο worker."""
+    def __init__(self, plugin) -> None:
+        super().__init__()
+        self.plugin = plugin
+
+    @Slot(str)
+    def status(self, message: str) -> None:
+        self.plugin.ctx.events.status.emit(message)
+
+    @Slot(str, str)
+    def result(self, text: str, provider: str) -> None:
+        self.plugin.accept_result(text, provider)
+
+    @Slot()
+    def cleanup(self) -> None:
+        self.plugin.cleanup()
 
 
 class DictationPlugin(Plugin):
@@ -65,83 +80,129 @@ class DictationPlugin(Plugin):
         super().__init__(ctx)
         self._thread: QThread | None = None
         self._worker: _Worker | None = None
+        self._bridge = _Bridge(self)
+        self._text = ""
         self._boxes: list[QPlainTextEdit] = []
+        QApplication.instance().aboutToQuit.connect(self.shutdown)
 
     def build_widget(self, mode: str) -> QWidget | None:
         if mode == "buttons":
             return None
-        w = QWidget()
-        lay = QVBoxLayout(w)
-        lay.setContentsMargins(0, 0, 0, 0)
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(0, 0, 0, 0)
         row = QHBoxLayout()
-        mic = QPushButton("🎤 Υπαγόρευση")
-        mic.setToolTip("Πάτησε, μίλα· σταματά αυτόματα σε σιωπή ή ξαναπάτησε.")
-        mic.clicked.connect(self.toggle)
         lang = QComboBox()
-        for l in self.ctx.cfg.get("speech.langs", ["el", "en"]):
-            lang.addItem({"el": "Ελληνικά", "en": "English"}.get(l, l), l)
-        lang.setCurrentText(str(self.ctx.cfg.get("speech.lang", "el")))
-        lang.currentIndexChanged.connect(lambda: self._set_lang(lang.currentData()))
-        row.addWidget(mic); row.addWidget(lang); row.addStretch(1)
-        lay.addLayout(row)
-        box = QPlainTextEdit()
-        box.setPlaceholderText("Το αναγνωρισμένο κείμενο εμφανίζεται εδώ (επεξεργάσιμο)…")
-        lay.addWidget(box, 1)
-        self._boxes.append(box)
-        lay.addWidget(QLabel(""))
-        return w
+        for code in self.ctx.cfg.get("speech.langs", ["el", "en"]):
+            lang.addItem({"el": "Ελληνικά", "en": "English"}.get(code, code), code)
+        lang.setCurrentIndex(max(0, lang.findData(self.ctx.cfg.get("speech.lang", "el"))))
+        lang.currentIndexChanged.connect(lambda *_: self.set_option("speech.lang", lang.currentData()))
+        row.addWidget(lang)
+        devices = QComboBox()
+        devices.setMinimumContentsLength(12)
+        devices.setSizeAdjustPolicy(QComboBox.AdjustToMinimumContentsLengthWithIcon)
+        active = QLabel()
+        active.setWordWrap(True)
+        devices.addItem("Προεπιλεγμένο συστήματος", "")
+        default_name = "μη διαθέσιμο"
+        if mic_available()[0]:
+            try:
+                import sounddevice as sd  # προαιρετική εξάρτηση
+                default_name = sd.query_devices(kind="input")["name"]
+                seen: set[str] = set()
+                for device in sd.query_devices():
+                    name = device["name"]
+                    if device["max_input_channels"] > 0 and name not in seen:
+                        devices.addItem(name, name)
+                        seen.add(name)
+            except Exception:
+                log.exception("Αδυναμία απαρίθμησης μικροφώνων")
+        selected = self.ctx.cfg.get("speech.device", "")
+        index = devices.findData(selected)
+        if index < 0:
+            devices.addItem(f"Μη διαθέσιμο: {selected}", selected)
+            index = devices.count() - 1
+        devices.setCurrentIndex(index)
 
-    def _set_lang(self, lang: str) -> None:
-        if lang:
-            self.ctx.cfg.set("speech.lang", lang)
-            self.ctx.cfg.save()
+        def update_device(*_) -> None:
+            value = devices.currentData()
+            self.set_option("speech.device", value)
+            active.setText(f"Μικρόφωνο: {value or default_name}")
+
+        devices.currentIndexChanged.connect(update_device)
+        active.setText(f"Μικρόφωνο: {selected or default_name}")
+        row.addWidget(QLabel("Είσοδος:"))
+        row.addWidget(devices, 1)
+        layout.addLayout(row)
+        layout.addWidget(active)
+        box = QPlainTextEdit()
+        box.setPlaceholderText("Αναγνωρισμένο κείμενο (επεξεργάσιμο)…")
+        box.setPlainText(self._text)
+        box.textChanged.connect(lambda: setattr(self, "_text", box.toPlainText()))
+        self._boxes.append(box)
+        box.destroyed.connect(lambda *_: self._boxes.remove(box) if box in self._boxes else None)
+        layout.addWidget(box, 1)
+        return widget
+
+    def set_option(self, key: str, value) -> None:
+        self.ctx.cfg.set(key, value)
+        self.ctx.cfg.save()
 
     def actions(self) -> list[Action]:
-        return [Action("mic", "Υπαγόρευση", "🎤", self.toggle)]
+        # Ένα μόνο κουμπί: αυτό που κατασκευάζει το Shell στη λωρίδα.
+        return [Action("mic", "Υπαγόρευση / Στοπ", "🎤", self.toggle)]
 
     def toggle(self) -> None:
         if self._thread is not None:
-            self._worker.stop.set()  # δεύτερο πάτημα = χειροκίνητο στοπ
+            if self._worker is not None:
+                self._worker.stop.set()
             return
         ok, why = mic_available()
         if not ok:
-            self.ctx.events.status.emit(f"Μικρόφωνο μη διαθέσιμο: {why}")
+            self.ctx.events.status.emit(why)
             return
+        if not self.ctx.cfg.get("plugins.dictation", True):
+            return
+        snapshot = copy.copy(self.ctx.cfg)
+        snapshot.data = copy.deepcopy(self.ctx.cfg.data)
+        thread = QThread(self._bridge)
+        worker = _Worker(snapshot, SpeechService(snapshot))
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.state.connect(self._bridge.status)
+        worker.error.connect(self._bridge.status)
+        worker.result.connect(self._bridge.result)
+        worker.finished.connect(thread.quit)
+        worker.finished.connect(worker.deleteLater)
+        thread.finished.connect(self._bridge.cleanup)
+        self._thread, self._worker = thread, worker
         self.ctx.events.status.emit("Ηχογράφηση…")
-        self._thread = QThread()
-        self._worker = _Worker(self.ctx.cfg)
-        self._worker.moveToThread(self._thread)
-        self._thread.started.connect(self._worker.run)
-        self._worker.state.connect(self._on_state)
-        self._worker.result.connect(self._on_result)
-        self._worker.error.connect(self._on_error)
-        self._worker.finished.connect(self._thread.quit)
-        self._thread.finished.connect(self._cleanup)
-        self._thread.start()
+        thread.start()
 
-    def _on_state(self, s: str) -> None:
-        if s.startswith("transcribing"):
-            p = s.split(":", 1)[1] if ":" in s else ""
-            self.ctx.events.status.emit(f"Αναγνώριση… ({p})" if p else "Αναγνώριση…")
-        elif s == "done":
-            self.ctx.events.status.emit("Έτοιμο.")
-
-    def _on_result(self, text: str, provider: str) -> None:
+    def accept_result(self, text: str, provider: str) -> None:
         if text:
-            for b in self._boxes:
-                cur = b.toPlainText()
-                b.setPlainText((cur + " " if cur.strip() else "") + text)
+            self._text = (self._text + " " if self._text.strip() else "") + text
+            for box in list(self._boxes):
+                box.setPlainText(self._text)
             self.ctx.events.status.emit(f"Αναγνωρίστηκε ({provider}).")
         else:
             self.ctx.events.status.emit("Δεν αναγνωρίστηκε ομιλία.")
 
-    def _on_error(self, msg: str) -> None:
-        self.ctx.events.status.emit(msg)
-
-    def _cleanup(self) -> None:
-        if self._thread:
+    def cleanup(self) -> None:
+        if self._thread is not None:
             self._thread.deleteLater()
         self._thread, self._worker = None, None
+
+    def shutdown(self) -> None:
+        # ΠΡΟΣΟΧΗ: δεν καταστρέφουμε QThread όσο εκτελείται αναγνώριση.
+        if self._thread is not None:
+            try:
+                if self._worker is not None:
+                    self._worker.stop.set()
+            except RuntimeError:
+                pass
+            self._thread.quit()
+            self._thread.wait()
 
 
 def create(ctx) -> DictationPlugin:
