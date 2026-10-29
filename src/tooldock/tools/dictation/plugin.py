@@ -5,7 +5,7 @@ import copy
 import logging
 import threading
 from PySide6.QtCore import QObject, QThread, Signal, Slot
-from PySide6.QtWidgets import QApplication, QComboBox, QHBoxLayout, QLabel, QPlainTextEdit, QVBoxLayout, QWidget
+from PySide6.QtWidgets import QApplication, QComboBox, QHBoxLayout, QLabel, QPlainTextEdit, QSizePolicy, QVBoxLayout, QWidget
 from tooldock.speech.base import SttError
 from tooldock.speech.devices import current_devices, label, resolve_device, selector
 from tooldock.speech.recorder import available as mic_available, record
@@ -148,6 +148,9 @@ class DictationPlugin(Plugin):
             self._boxes.append(box)
             box.destroyed.connect(lambda *_: self._boxes.remove(box) if box in self._boxes else None)
             layout.addWidget(box, 1)
+        else:
+            # Χωρίς πεδίο κειμένου εδώ: ο επιπλέον χώρος ανήκει στο notes.
+            widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         return widget
 
     def set_option(self, key: str, value) -> None:
