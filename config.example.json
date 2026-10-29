@@ -1,21 +1,33 @@
 {
-  "config_version": 1,
+  "config_version": 2,
   "data_dir": "data",
   "ui": {
     "mode": "compact",
     "always_on_top": true,
     "start_hidden": false,
+    "screen": "auto",
     "dock": {
       "state": "float",
-      "thickness": 360,
+      "thickness": {
+        "compact": 360,
+        "full": 480
+      },
       "margin_start": 0,
       "margin_end": 0
     },
     "float": {
       "x": 100,
       "y": 100,
-      "w": 380,
-      "h": 320
+      "sizes": {
+        "compact": {
+          "w": 380,
+          "h": 260
+        },
+        "full": {
+          "w": 520,
+          "h": 420
+        }
+      }
     },
     "buttons": [
       {

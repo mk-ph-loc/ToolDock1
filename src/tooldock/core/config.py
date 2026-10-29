@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 log = logging.getLogger("tooldock.config")
-CONFIG_VERSION = 1
+CONFIG_VERSION = 2
 
 DEFAULTS: dict[str, Any] = {
     "config_version": CONFIG_VERSION,
@@ -20,19 +20,24 @@ DEFAULTS: dict[str, Any] = {
         "mode": "compact",            # buttons | compact | full
         "always_on_top": True,
         "start_hidden": False,
+        "screen": "auto",             # auto (όπου βρίσκεται) | 0 | 1 | ... (αριθμός οθόνης)
         "dock": {
             "state": "float",         # float | left | right | top | bottom
-            "thickness": 360,         # πλάτος (left/right) ή ύψος (top/bottom)
+            # πάχος ανά mode (πλάτος αν left/right, ύψος αν top/bottom)· το buttons προσαρμόζεται μόνο του
+            "thickness": {"compact": 360, "full": 480},
             "margin_start": 0,        # απόσταση από την αρχή της πλευράς (πάνω/αριστερά)
             "margin_end": 0,          # απόσταση από το τέλος της πλευράς (κάτω/δεξιά)
         },
-        "float": {"x": 100, "y": 100, "w": 380, "h": 320},
+        "float": {                    # το buttons προσαρμόζεται μόνο του στα κουμπιά
+            "x": 100, "y": 100,
+            "sizes": {"compact": {"w": 380, "h": 260}, "full": {"w": 520, "h": 420}},
+        },
         "buttons": [                  # σειρά + on/off ανά κουμπί της λωρίδας
             {"id": "notepad", "enabled": True},
             {"id": "downloads", "enabled": True},
             {"id": "browser", "enabled": True},
         ],
-        "show_system_buttons": True,  # 📌 mode dock ⚙
+        "show_system_buttons": True,  # 📌 mode ⚙
     },
     "plugins": {"notes": True, "quick_actions": True},
     "notes": {
@@ -78,7 +83,11 @@ def deep_merge(base: dict, over: dict) -> dict:
 
 
 def migrate(cfg: dict) -> dict:
-    """Μελλοντικές μετατροπές εκδόσεων config. Τώρα μόνο ενημέρωση αριθμού."""
+    """Μετατροπές παλιών config. v1->v2: πάχος dock ως αριθμός γίνεται dict ανά mode."""
+    dock = cfg.get("ui", {}).get("dock", {})
+    t = dock.get("thickness")
+    if isinstance(t, (int, float)) and not isinstance(t, bool):
+        dock["thickness"] = {"compact": int(t), "full": int(t)}
     cfg["config_version"] = CONFIG_VERSION
     return cfg
 

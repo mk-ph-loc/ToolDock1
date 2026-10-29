@@ -2,6 +2,7 @@
 .SYNOPSIS  tests -> zip -> commit -> tag -> push (origin + github). Χρήση:
   .\scripts\release.ps1 -Message "περιγραφή"            # χρησιμοποιεί το VERSION όπως είναι
   .\scripts\release.ps1 -Bump minor -Message "..."      # patch | minor | major | none
+  Τρέχε το από το main, αφού έχεις κάνει merge το branch του AI.
 #>
 param([string]$Bump = "none", [string]$Message = "release")
 $ErrorActionPreference = "Stop"
@@ -41,13 +42,18 @@ Compress-Archive -Path $dest -DestinationPath $zip
 Remove-Item $stage -Recurse -Force
 Write-Host "   $zip"
 
-# 4. git
+# 4. git (commit μόνο αν υπάρχουν αλλαγές· αν έγινε merge έτοιμο, μένει μόνο το tag)
 Step "git commit + tag"
 git add -A
-git commit -m "v${v}: $Message"
-Check "git commit"
+git diff --cached --quiet
+if ($LASTEXITCODE -ne 0) {
+  git commit -m "v${v}: $Message"
+  Check "git commit"
+} else {
+  Write-Host "   Καμία νέα αλλαγή για commit."
+}
 git tag "v$v"
-Check "git tag"
+Check "git tag (υπάρχει ήδη;)"
 
 # 5. push
 $ok = @()
