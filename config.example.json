@@ -1,0 +1,68 @@
+{
+  "config_version": 1,
+  "data_dir": "data",
+  "ui": {
+    "mode": "compact",
+    "always_on_top": true,
+    "start_hidden": false,
+    "dock": {
+      "state": "float",
+      "thickness": 360,
+      "margin_start": 0,
+      "margin_end": 0
+    },
+    "float": {
+      "x": 100,
+      "y": 100,
+      "w": 380,
+      "h": 320
+    },
+    "buttons": [
+      {
+        "id": "notepad",
+        "enabled": true
+      },
+      {
+        "id": "downloads",
+        "enabled": true
+      },
+      {
+        "id": "browser",
+        "enabled": true
+      }
+    ],
+    "show_system_buttons": true
+  },
+  "plugins": {
+    "notes": true,
+    "quick_actions": true
+  },
+  "notes": {
+    "base_file": "Base.txt",
+    "note_ext": ".txt",
+    "topics": [
+      "ΣΧΟΛΕΙΟ",
+      "PROMPT",
+      "TO-DO",
+      "ΛΟΓΑΡΙΑΣΜΟΣ",
+      "ΥΠΕΝΘΥΜΙΣΗ",
+      "ΔΟΚΙΜΕΣ",
+      "ΠΡΟΓΡΑΜΜΑΤΙΣΜΟΣ",
+      "SNIPPET"
+    ],
+    "default_topic": "",
+    "copy_to_clipboard": true,
+    "write_base": true,
+    "write_topic": true,
+    "clear_after_ok": true,
+    "notepad_opens_base": true
+  },
+  "quick_actions": {
+    "downloads_path": "",
+    "browser_exe": "",
+    "browser_urls": [
+      "https://www.google.com"
+    ]
+  },
+  "autostart": false
+}
