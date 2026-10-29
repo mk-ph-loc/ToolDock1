@@ -1,16 +1,16 @@
-# HANDOFF — ToolDock
-**Τρέχουσα έκδοση:** v0.1.1 · **Ημ/νία:** 2026-10-29 · **Μοντέλο:** Sonnet
+# HANDOFF — ToolDock v0.2.0
+Ενημέρωση: 2026-10-30. Branch ai/v0.2.0, PR #1. Ελεγμένος κώδικας: d6bfe882eb2c5578469f388ea80d92fd1fd83f18.
+
 ## Κατάσταση
-- Λειτουργεί (tests): config(+migration v2), storage, textnorm, geometry — 38 περίπου. UI αδοκίμαστο από το AI (δεν έχει PySide6/οθόνη).
-- Αδοκίμαστες εκδόσεις από τον χρήστη: v0.1.1 (το v0.1.0 δοκιμάστηκε από τον χρήστη, βρέθηκαν τα θέματα πολλαπλών οθονών/auto-fit/status)
-## Επόμενο βήμα
-S2 → v0.2.0 (μικρόφωνο, πάροχοι STT) σε branch `ai/v0.2.0` · Χρειάζεται Opus: όχι
-## Ανοιχτές αποφάσεις
-| # | Θέμα | [Π] |
-|---|------|-----|
-| Δ7 | AppBar (δέσμευση χώρου οθόνης) | S8 |
-| Δ8 | Hotkey για εναλλαγή mode / σύρσιμο περιθωρίων | S4 |
-## Παγίδες
-- Γεωμετρία: καθαρή λογική στο core/geometry.py (με tests)· το Qt μέρος στο ui/shell.py (_place κάνει δεύτερο πέρασμα μετά το show).
-- Μικτό DPI δύο οθονών: αν ξαναδείς μετατόπιση, στείλε μου scaling % κάθε οθόνης και το log.
-- Git: βλ. docs/GIT-WORKFLOW.md.
+- Χρήστης στα Windows: 56 passed in 0.52s στο τελικό patch και οπτικό ΟΚ για το ύψος μικροφώνου.
+- Επιβεβαιώθηκαν Google online, Whisper και αυτόματο offline fallback.
+- Κώδικας S2: μικρόφωνο ανά host API, el/en, worker, κοινό πεδίο notes/OK, buttons→compact, status, lazy προαιρετικές εξαρτήσεις.
+- Τα κενά checklist items της v0.1.1 και οι μη επιβεβαιωμένες επιμέρους hardware/UI περιπτώσεις δεν μετατράπηκαν σε ✅. Βλ. TESTS.md.
+
+## Υπολειπόμενα παράδοσης
+Το παρόν commit αλλάζει μόνο τεκμηρίωση. Merge/tag/release δεν εκτελέστηκαν από το AI.
+Ο χρήστης ελέγχει το PR #1 και κάνει merge. Έπειτα main → pull από το GitHub remote → scripts/release.ps1, χωρίς bump. Το script ξανατρέχει tests, φτιάχνει dist/tooldock-v0.2.0.zip με εσωτερικό φάκελο tooldock, tag και push στα origin/github. Έλεγξε την τελική επιτυχία και των δύο remotes.
+Δεν έχει δημιουργηθεί/παραδοθεί πλήρες zip από το AI. Αντίγραφα docs στα Project files εκκρεμούν· η ενημερωμένη αλήθεια είναι στο branch του repo.
+
+## Επόμενη συνεδρία
+Νέα συνομιλία για S3/v0.3.0 μόνο μετά την επιβεβαίωση merge/release. Αρχή με πραγματικό main SHA/ημερομηνία, έλεγχο HANDOFF/ROADMAP/TESTS και branch ai/v0.3.0 + PR. Δεν απαιτείται Opus για S3. Όχι νέα έκδοση πριν λυθεί τυχόν αποτυχία release.

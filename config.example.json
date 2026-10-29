@@ -1,5 +1,5 @@
 {
-  "config_version": 2,
+  "config_version": 3,
   "data_dir": "data",
   "ui": {
     "mode": "compact",
@@ -8,60 +8,28 @@
     "screen": "auto",
     "dock": {
       "state": "float",
-      "thickness": {
-        "compact": 360,
-        "full": 480
-      },
+      "thickness": {"compact": 360, "full": 480},
       "margin_start": 0,
       "margin_end": 0
     },
     "float": {
       "x": 100,
       "y": 100,
-      "sizes": {
-        "compact": {
-          "w": 380,
-          "h": 260
-        },
-        "full": {
-          "w": 520,
-          "h": 420
-        }
-      }
+      "sizes": {"compact": {"w": 380, "h": 260}, "full": {"w": 520, "h": 420}}
     },
     "buttons": [
-      {
-        "id": "notepad",
-        "enabled": true
-      },
-      {
-        "id": "downloads",
-        "enabled": true
-      },
-      {
-        "id": "browser",
-        "enabled": true
-      }
+      {"id": "mic", "enabled": true},
+      {"id": "notepad", "enabled": true},
+      {"id": "downloads", "enabled": true},
+      {"id": "browser", "enabled": true}
     ],
     "show_system_buttons": true
   },
-  "plugins": {
-    "notes": true,
-    "quick_actions": true
-  },
+  "plugins": {"dictation": true, "notes": true, "quick_actions": true},
   "notes": {
     "base_file": "Base.txt",
     "note_ext": ".txt",
-    "topics": [
-      "ΣΧΟΛΕΙΟ",
-      "PROMPT",
-      "TO-DO",
-      "ΛΟΓΑΡΙΑΣΜΟΣ",
-      "ΥΠΕΝΘΥΜΙΣΗ",
-      "ΔΟΚΙΜΕΣ",
-      "ΠΡΟΓΡΑΜΜΑΤΙΣΜΟΣ",
-      "SNIPPET"
-    ],
+    "topics": ["ΣΧΟΛΕΙΟ", "PROMPT", "TO-DO", "ΛΟΓΑΡΙΑΣΜΟΣ", "ΥΠΕΝΘΥΜΙΣΗ", "ΔΟΚΙΜΕΣ", "ΠΡΟΓΡΑΜΜΑΤΙΣΜΟΣ", "SNIPPET"],
     "default_topic": "",
     "copy_to_clipboard": true,
     "write_base": true,
@@ -72,9 +40,17 @@
   "quick_actions": {
     "downloads_path": "",
     "browser_exe": "",
-    "browser_urls": [
-      "https://www.google.com"
-    ]
+    "browser_urls": ["https://www.google.com"]
+  },
+  "speech": {
+    "lang": "el",
+    "langs": ["el", "en"],
+    "providers": ["google", "whisper"],
+    "device": "",
+    "sample_rate": 16000,
+    "silence": {"enabled": true, "threshold": 500, "stop_after_s": 1.5, "no_speech_timeout_s": 6.0, "max_s": 60.0},
+    "google": {"timeout_s": 10},
+    "whisper": {"model": "small", "device": "cpu", "compute_type": "int8", "model_dir": "models", "beam_size": 1}
   },
   "autostart": false
 }

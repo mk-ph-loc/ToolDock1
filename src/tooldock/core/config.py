@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 log = logging.getLogger("tooldock.config")
-CONFIG_VERSION = 2
+CONFIG_VERSION = 3
 
 DEFAULTS: dict[str, Any] = {
     "config_version": CONFIG_VERSION,
@@ -33,13 +33,14 @@ DEFAULTS: dict[str, Any] = {
             "sizes": {"compact": {"w": 380, "h": 260}, "full": {"w": 520, "h": 420}},
         },
         "buttons": [                  # σειρά + on/off ανά κουμπί της λωρίδας
+            {"id": "mic", "enabled": True},
             {"id": "notepad", "enabled": True},
             {"id": "downloads", "enabled": True},
             {"id": "browser", "enabled": True},
         ],
         "show_system_buttons": True,  # 📌 mode ⚙
     },
-    "plugins": {"notes": True, "quick_actions": True},
+    "plugins": {"dictation": True, "notes": True, "quick_actions": True},
     "notes": {
         "base_file": "Base.txt",
         "note_ext": ".txt",
@@ -56,6 +57,23 @@ DEFAULTS: dict[str, Any] = {
         "downloads_path": "",         # κενό = φάκελος Downloads του χρήστη
         "browser_exe": "",            # κενό = προεπιλεγμένος browser
         "browser_urls": ["https://www.google.com"],
+    },
+    "speech": {
+        "lang": "el",                 # τρέχουσα γλώσσα υπαγόρευσης
+        "langs": ["el", "en"],        # γλώσσες για το κουμπί εναλλαγής (κωδικοί στο speech/base.py)
+        "providers": ["google", "whisper"],  # σειρά προτεραιότητας· αν αποτύχει ο ένας δοκιμάζεται ο επόμενος
+        "device": "",                 # όνομα μικροφώνου· κενό = προεπιλεγμένο των Windows
+        "sample_rate": 16000,
+        "silence": {
+            "enabled": True,          # αυτόματο στοπ σε σιωπή (αλλιώς μόνο χειροκίνητο)
+            "threshold": 500,         # RMS int16 — ανέβασέ το αν ο χώρος έχει θόρυβο
+            "stop_after_s": 1.5,      # σιωπή μετά την ομιλία
+            "no_speech_timeout_s": 6.0,
+            "max_s": 60.0,
+        },
+        "google": {"timeout_s": 10},
+        "whisper": {"model": "small", "device": "cpu", "compute_type": "int8",
+                    "model_dir": "models", "beam_size": 1},
     },
     "autostart": False,
 }
@@ -82,12 +100,22 @@ def deep_merge(base: dict, over: dict) -> dict:
     return out
 
 
-def migrate(cfg: dict) -> dict:
-    """Μετατροπές παλιών config. v1->v2: πάχος dock ως αριθμός γίνεται dict ανά mode."""
+def migrate(cfg: dict, from_version: int | None = None) -> dict:
+    """Μετατροπές παλιών config.
+
+    v1->v2: πάχος dock ως αριθμός γίνεται dict ανά mode.
+    v2->v3: προστίθεται το κουμπί «mic» στη λωρίδα (μία φορά, στην αρχή).
+    from_version: η έκδοση του αρχείου του χρήστη ΠΡΙΝ τη συγχώνευση με τα defaults.
+    """
+    ver = from_version if from_version is not None else int(cfg.get("config_version", 1))
     dock = cfg.get("ui", {}).get("dock", {})
     t = dock.get("thickness")
     if isinstance(t, (int, float)) and not isinstance(t, bool):
         dock["thickness"] = {"compact": int(t), "full": int(t)}
+    if ver < 3:
+        btns = cfg.setdefault("ui", {}).get("buttons")
+        if isinstance(btns, list) and not any(isinstance(b, dict) and b.get("id") == "mic" for b in btns):
+            btns.insert(0, {"id": "mic", "enabled": True})
     cfg["config_version"] = CONFIG_VERSION
     return cfg
 
@@ -115,7 +143,8 @@ class Config:
             log.error("Άκυρο config.json (%s). Επαναφορά defaults.", exc)
             self.path.replace(self.path.with_suffix(".json.bad"))
             user = {}
-        self.data = migrate(deep_merge(DEFAULTS, user))
+        ver = int(user.get("config_version", 1)) if user else CONFIG_VERSION
+        self.data = migrate(deep_merge(DEFAULTS, user), from_version=ver)
         return self
 
     def save(self) -> None:
