@@ -1,19 +1,16 @@
 # HANDOFF — ToolDock v0.2.0
-Ημερομηνία: 2026-10-30. Branch ai/v0.2.0, PR #1. Δεν έγινε merge/tag/release.
+Ενημέρωση: 2026-10-30. Branch ai/v0.2.0, PR #1. Ελεγμένος κώδικας: d6bfe882eb2c5578469f388ea80d92fd1fd83f18.
 
-## Επιβεβαιωμένα
-- Χρήστης: Google online, Whisper και αυτόματο offline fallback λειτουργούν.
-- Χρήστης: στο commit 6199700, pytest -q → 54 passed in 0.50s.
-- Το αποτέλεσμα αυτό δεν καλύπτει τη νεότερη διόρθωση ύψους.
+## Κατάσταση
+- Χρήστης στα Windows: 56 passed in 0.52s στο τελικό patch και οπτικό ΟΚ για το ύψος μικροφώνου.
+- Επιβεβαιώθηκαν Google online, Whisper και αυτόματο offline fallback.
+- Κώδικας S2: μικρόφωνο ανά host API, el/en, worker, κοινό πεδίο notes/OK, buttons→compact, status, lazy προαιρετικές εξαρτήσεις.
+- Τα κενά checklist items της v0.1.1 και οι μη επιβεβαιωμένες επιμέρους hardware/UI περιπτώσεις δεν μετατράπηκαν σε ✅. Βλ. TESTS.md.
 
-## Υλοποίηση
-Μικρόφωνα ανά όνομα + host API (speech.device ως dict), τρέχον index κατά την έναρξη, κοινό πεδίο notes/υπαγόρευσης με OK/Enter, διατήρηση προχείρου μεταξύ modes, buttons→compact με speech.expand_on_record (προεπιλογή true).
-Η περιοχή χειριστηρίων έχει πλέον Maximum κατακόρυφη πολιτική όταν notes=true. Αν notes=false, το δικό της πλαίσιο κειμένου παραμένει επεκτάσιμο.
+## Υπολειπόμενα παράδοσης
+Το παρόν commit αλλάζει μόνο τεκμηρίωση. Merge/tag/release δεν εκτελέστηκαν από το AI.
+Ο χρήστης ελέγχει το PR #1 και κάνει merge. Έπειτα main → pull από το GitHub remote → scripts/release.ps1, χωρίς bump. Το script ξανατρέχει tests, φτιάχνει dist/tooldock-v0.2.0.zip με εσωτερικό φάκελο tooldock, tag και push στα origin/github. Έλεγξε την τελική επιτυχία και των δύο remotes.
+Δεν έχει δημιουργηθεί/παραδοθεί πλήρες zip από το AI. Αντίγραφα docs στα Project files εκκρεμούν· η ενημερωμένη αλήθεια είναι στο branch του repo.
 
-## Εκκρεμή
-1. Πλήρες pytest -q στο Windows venv μετά τη διόρθωση (προστέθηκαν 2 layout tests· δεν εκτελέστηκαν από το AI επειδή λείπει PySide6).
-2. Οπτικός επανέλεγχος compact/full/dock και buttons→🎤→κείμενο→OK.
-3. Ενοποίηση docs/TESTS-v0.2.0-FINAL.md στο docs/TESTS.md, τελική ενημέρωση CHANGELOG/CODE-MAP/DECISIONS και πλήρες zip μέσω release.ps1 μετά τον έλεγχο.
-4. Αντίγραφα docs στα Project files παραμένουν εκκρεμή· τα υπάρχοντα εκεί είναι παλιότερα.
-
-Μη ξεκινήσεις S3 πριν κλείσει το S2. Δεν απαιτείται Opus για το τρέχον scope. Αν βαραίνει η συνομιλία, χρησιμοποίησε το NEXT-CHAT-PROMPT.
+## Επόμενη συνεδρία
+Νέα συνομιλία για S3/v0.3.0 μόνο μετά την επιβεβαίωση merge/release. Αρχή με πραγματικό main SHA/ημερομηνία, έλεγχο HANDOFF/ROADMAP/TESTS και branch ai/v0.3.0 + PR. Δεν απαιτείται Opus για S3. Όχι νέα έκδοση πριν λυθεί τυχόν αποτυχία release.
