@@ -1,4 +1,4 @@
-"""Υπαγόρευση: σαφής συσκευή, buttons→compact και κοινό πλαίσιο σημειώσεων."""
+"""Υπαγόρευση, φωνητικές εντολές, σαφής συσκευή και κοινό πλαίσιο σημειώσεων."""
 from __future__ import annotations
 
 import copy
@@ -6,6 +6,7 @@ import logging
 import threading
 from PySide6.QtCore import QObject, QThread, Signal, Slot
 from PySide6.QtWidgets import QApplication, QComboBox, QHBoxLayout, QLabel, QPlainTextEdit, QSizePolicy, QVBoxLayout, QWidget
+from tooldock.core.commands import CommandEngine, CommandMatch
 from tooldock.speech.base import SttError
 from tooldock.speech.devices import current_devices, label, resolve_device, selector
 from tooldock.speech.recorder import available as mic_available, record
@@ -58,6 +59,7 @@ class _Worker(QObject):
 
 class _Bridge(QObject):
     """Δέχεται αποτελέσματα στο νήμα GUI."""
+
     def __init__(self, plugin) -> None:
         super().__init__()
         self.plugin = plugin
@@ -85,8 +87,12 @@ class DictationPlugin(Plugin):
         self._stop = threading.Event()
         self._bridge = _Bridge(self)
         self._service = SpeechService(ctx.cfg)
+        self._engine = CommandEngine(ctx.cfg)
+        self._pending: CommandMatch | None = None
         self._text = ""
         self._boxes: list[QPlainTextEdit] = []
+        # Ο επεξεργαστής σημειώσεων καλεί αυτόν τον runner όταν πατηθεί OK.
+        ctx.command_runner = self._confirm_pending
         QApplication.instance().aboutToQuit.connect(self.shutdown)
 
     def build_widget(self, mode: str) -> QWidget | None:
@@ -149,7 +155,6 @@ class DictationPlugin(Plugin):
             box.destroyed.connect(lambda *_: self._boxes.remove(box) if box in self._boxes else None)
             layout.addWidget(box, 1)
         else:
-            # Χωρίς πεδίο κειμένου εδώ: ο επιπλέον χώρος ανήκει στο notes.
             widget.setSizePolicy(QSizePolicy.Preferred, QSizePolicy.Maximum)
         return widget
 
@@ -200,6 +205,24 @@ class DictationPlugin(Plugin):
         if not text:
             self.ctx.events.status.emit("Δεν αναγνωρίστηκε ομιλία.")
             return
+        mode = str(self.ctx.cfg.get("commands.mode", "auto"))
+        if self.ctx.cfg.get("commands.enabled", True) and mode != "text_only":
+            try:
+                match = self._engine.match(text)
+            except RuntimeError as exc:
+                self.ctx.events.status.emit(str(exc))
+                match = None
+            if match is not None:
+                if mode == "commands_only" or match.command.get("immediate", False):
+                    self._run(match)
+                    return
+                self._pending = match
+                self.ctx.events.status.emit(
+                    f"Εντολή: «{match.command.get('id', '')}» ({match.score:.0f}%) — OK για εκτέλεση.")
+                return
+            if mode == "commands_only":
+                self.ctx.events.status.emit("Μόνο εντολές: δεν αναγνωρίστηκε εντολή.")
+                return
         if self.ctx.cfg.get("plugins.notes", True):
             self.ctx.events.recognized.emit(text)
         else:
@@ -207,6 +230,29 @@ class DictationPlugin(Plugin):
             for box in list(self._boxes):
                 box.setPlainText(self._text)
         self.ctx.events.status.emit(f"Αναγνωρίστηκε ({provider}).")
+
+    def _run(self, match: CommandMatch) -> None:
+        """Εκτελεί εντολή, με προαιρετικό ήχο επιβεβαίωσης."""
+        if match.command.get("sound", False):
+            QApplication.beep()
+        try:
+            ok = self._engine.execute(match)
+        except Exception:
+            log.exception("Σφάλμα εκτέλεσης εντολής")
+            ok = False
+        name = match.command.get("id", "")
+        self.ctx.events.status.emit(
+            f"Εκτελέστηκε εντολή: {name} ({match.score:.0f}%)." if ok
+            else f"Αποτυχία εκτέλεσης εντολής: {name}.")
+
+    def _confirm_pending(self) -> bool:
+        """Εκτέλεση εντολής που περιμένει επιβεβαίωση με OK. Επιστρέφει True αν εκτελέστηκε."""
+        match = self._pending
+        if match is None:
+            return False
+        self._pending = None
+        self._run(match)
+        return True
 
     def cleanup(self) -> None:
         if self._thread is not None:

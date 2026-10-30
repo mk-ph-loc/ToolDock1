@@ -1,4 +1,4 @@
-"""Κοινό πλαίσιο κειμένου/υπαγόρευσης και OK/Enter."""
+"""Κοινό πλαίσιο κειμένου/υπαγόρευσης, OK/Enter και επιβεβαίωση εντολών."""
 from __future__ import annotations
 
 from datetime import datetime
@@ -70,6 +70,9 @@ class NotesPlugin(Plugin):
         return widget
 
     def submit(self, box: QPlainTextEdit, combo: QComboBox | None) -> None:
+        runner = getattr(self.ctx, "command_runner", None)
+        if runner is not None and runner():
+            return
         text = box.toPlainText()
         if not text.strip():
             return

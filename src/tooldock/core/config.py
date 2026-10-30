@@ -11,34 +11,33 @@ from pathlib import Path
 from typing import Any
 
 log = logging.getLogger("tooldock.config")
-CONFIG_VERSION = 3
+CONFIG_VERSION = 4
 
 DEFAULTS: dict[str, Any] = {
     "config_version": CONFIG_VERSION,
     "data_dir": "data",
     "ui": {
-        "mode": "compact",            # buttons | compact | full
+        "mode": "compact",
         "always_on_top": True,
         "start_hidden": False,
-        "screen": "auto",             # auto (όπου βρίσκεται) | 0 | 1 | ... (αριθμός οθόνης)
+        "screen": "auto",
         "dock": {
-            "state": "float",         # float | left | right | top | bottom
-            # πάχος ανά mode (πλάτος αν left/right, ύψος αν top/bottom)· το buttons προσαρμόζεται μόνο του
+            "state": "float",
             "thickness": {"compact": 360, "full": 480},
-            "margin_start": 0,        # απόσταση από την αρχή της πλευράς (πάνω/αριστερά)
-            "margin_end": 0,          # απόσταση από το τέλος της πλευράς (κάτω/δεξιά)
+            "margin_start": 0,
+            "margin_end": 0,
         },
-        "float": {                    # το buttons προσαρμόζεται μόνο του στα κουμπιά
+        "float": {
             "x": 100, "y": 100,
             "sizes": {"compact": {"w": 380, "h": 260}, "full": {"w": 520, "h": 420}},
         },
-        "buttons": [                  # σειρά + on/off ανά κουμπί της λωρίδας
+        "buttons": [
             {"id": "mic", "enabled": True},
             {"id": "notepad", "enabled": True},
             {"id": "downloads", "enabled": True},
             {"id": "browser", "enabled": True},
         ],
-        "show_system_buttons": True,  # 📌 mode ⚙
+        "show_system_buttons": True,
     },
     "plugins": {"dictation": True, "notes": True, "quick_actions": True},
     "notes": {
@@ -54,20 +53,45 @@ DEFAULTS: dict[str, Any] = {
         "notepad_opens_base": True,
     },
     "quick_actions": {
-        "downloads_path": "",         # κενό = φάκελος Downloads του χρήστη
-        "browser_exe": "",            # κενό = προεπιλεγμένος browser
+        "downloads_path": "",
+        "browser_exe": "",
         "browser_urls": ["https://www.google.com"],
     },
+    "commands": {
+        "enabled": True,
+        "mode": "auto",              # auto | text_only | commands_only
+        "threshold": 80,             # ποσοστό rapidfuzz.partial_ratio
+        "items": [
+            {
+                "id": "explorer", "enabled": True,
+                "phrases": ["εξερεύνηση", "εξερευνητής", "αρχεία"],
+                "immediate": True, "confirm": False, "sound": False,
+                "args": ["explorer.exe", "{downloads}"]
+            },
+            {
+                "id": "network", "enabled": True,
+                "phrases": ["δίκτυο", "browser", "ίντερνετ"],
+                "immediate": True, "confirm": False, "sound": False,
+                "args": ["{browser}", "https://www.google.com"]
+            },
+            {
+                "id": "notes", "enabled": True,
+                "phrases": ["σημειώσεις", "σημειωματάριο"],
+                "immediate": True, "confirm": False, "sound": False,
+                "args": ["notepad.exe", "{base}"]
+            }
+        ],
+    },
     "speech": {
-        "lang": "el",                 # τρέχουσα γλώσσα υπαγόρευσης
-        "langs": ["el", "en"],        # γλώσσες για το κουμπί εναλλαγής (κωδικοί στο speech/base.py)
-        "providers": ["google", "whisper"],  # σειρά προτεραιότητας· αν αποτύχει ο ένας δοκιμάζεται ο επόμενος
-        "device": "",                 # όνομα μικροφώνου· κενό = προεπιλεγμένο των Windows
+        "lang": "el",
+        "langs": ["el", "en"],
+        "providers": ["google", "whisper"],
+        "device": "",
         "sample_rate": 16000,
         "silence": {
-            "enabled": True,          # αυτόματο στοπ σε σιωπή (αλλιώς μόνο χειροκίνητο)
-            "threshold": 500,         # RMS int16 — ανέβασέ το αν ο χώρος έχει θόρυβο
-            "stop_after_s": 1.5,      # σιωπή μετά την ομιλία
+            "enabled": True,
+            "threshold": 500,
+            "stop_after_s": 1.5,
             "no_speech_timeout_s": 6.0,
             "max_s": 60.0,
         },
@@ -92,11 +116,11 @@ def app_root() -> Path:
 def deep_merge(base: dict, over: dict) -> dict:
     """Συγχωνεύει over πάνω στο base. Οι λίστες αντικαθίστανται ολόκληρες."""
     out = copy.deepcopy(base)
-    for k, v in over.items():
-        if isinstance(v, dict) and isinstance(out.get(k), dict):
-            out[k] = deep_merge(out[k], v)
+    for key, value in over.items():
+        if isinstance(value, dict) and isinstance(out.get(key), dict):
+            out[key] = deep_merge(out[key], value)
         else:
-            out[k] = copy.deepcopy(v)
+            out[key] = copy.deepcopy(value)
     return out
 
 
@@ -104,18 +128,21 @@ def migrate(cfg: dict, from_version: int | None = None) -> dict:
     """Μετατροπές παλιών config.
 
     v1->v2: πάχος dock ως αριθμός γίνεται dict ανά mode.
-    v2->v3: προστίθεται το κουμπί «mic» στη λωρίδα (μία φορά, στην αρχή).
-    from_version: η έκδοση του αρχείου του χρήστη ΠΡΙΝ τη συγχώνευση με τα defaults.
+    v2->v3: προστίθεται το κουμπί «mic» στη λωρίδα.
+    v3->v4: προστίθενται defaults φωνητικών εντολών, αν δεν υπάρχουν.
     """
-    ver = from_version if from_version is not None else int(cfg.get("config_version", 1))
+    version = from_version if from_version is not None else int(cfg.get("config_version", 1))
     dock = cfg.get("ui", {}).get("dock", {})
-    t = dock.get("thickness")
-    if isinstance(t, (int, float)) and not isinstance(t, bool):
-        dock["thickness"] = {"compact": int(t), "full": int(t)}
-    if ver < 3:
-        btns = cfg.setdefault("ui", {}).get("buttons")
-        if isinstance(btns, list) and not any(isinstance(b, dict) and b.get("id") == "mic" for b in btns):
-            btns.insert(0, {"id": "mic", "enabled": True})
+    thickness = dock.get("thickness")
+    if isinstance(thickness, (int, float)) and not isinstance(thickness, bool):
+        dock["thickness"] = {"compact": int(thickness), "full": int(thickness)}
+    if version < 3:
+        buttons = cfg.setdefault("ui", {}).get("buttons")
+        if isinstance(buttons, list) and not any(
+                isinstance(button, dict) and button.get("id") == "mic" for button in buttons):
+            buttons.insert(0, {"id": "mic", "enabled": True})
+    if version < 4 and not cfg.get("commands", {}).get("items"):
+        cfg["commands"] = copy.deepcopy(DEFAULTS["commands"])
     cfg["config_version"] = CONFIG_VERSION
     return cfg
 
@@ -143,29 +170,29 @@ class Config:
             log.error("Άκυρο config.json (%s). Επαναφορά defaults.", exc)
             self.path.replace(self.path.with_suffix(".json.bad"))
             user = {}
-        ver = int(user.get("config_version", 1)) if user else CONFIG_VERSION
-        self.data = migrate(deep_merge(DEFAULTS, user), from_version=ver)
+        version = int(user.get("config_version", 1)) if user else CONFIG_VERSION
+        self.data = migrate(deep_merge(DEFAULTS, user), from_version=version)
         return self
 
     def save(self) -> None:
         self.path.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def get(self, dotted: str, default: Any = None) -> Any:
-        cur: Any = self.data
+        current: Any = self.data
         for part in dotted.split("."):
-            if not isinstance(cur, dict) or part not in cur:
+            if not isinstance(current, dict) or part not in current:
                 return default
-            cur = cur[part]
-        return cur
+            current = current[part]
+        return current
 
     def set(self, dotted: str, value: Any) -> None:
         parts = dotted.split(".")
-        cur = self.data
-        for p in parts[:-1]:
-            cur = cur.setdefault(p, {})
-        cur[parts[-1]] = value
+        current = self.data
+        for part in parts[:-1]:
+            current = current.setdefault(part, {})
+        current[parts[-1]] = value
 
     @property
     def data_dir(self) -> Path:
-        d = Path(self.get("data_dir", "data"))
-        return d if d.is_absolute() else self.root / d
+        directory = Path(self.get("data_dir", "data"))
+        return directory if directory.is_absolute() else self.root / directory

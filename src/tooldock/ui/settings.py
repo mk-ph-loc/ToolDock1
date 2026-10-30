@@ -1,20 +1,23 @@
-"""Παράθυρο ρυθμίσεων: οθόνη, dock/θέση/διαστάσεις ανά mode, κουμπιά, autostart, συντόμευση."""
+"""Παράθυρο ρυθμίσεων: παράθυρο, dock, κουμπιά, Windows και φωνητικές εντολές."""
 from __future__ import annotations
 
+from PySide6.QtCore import Qt
 from PySide6.QtGui import QGuiApplication
 from PySide6.QtWidgets import (QCheckBox, QComboBox, QDialog, QFormLayout, QGroupBox, QHBoxLayout,
-                               QLabel, QLineEdit, QPushButton, QSpinBox, QVBoxLayout)
+                               QLabel, QLineEdit, QPushButton, QSpinBox, QTableWidget,
+                               QTableWidgetItem, QVBoxLayout)
 
 from tooldock.core import system
+from tooldock.core.commands import CommandEngine
 from tooldock.core.geometry import float_size, thickness_for, with_thickness
 from tooldock.ui.shell import MODES, SIDES
 
 
 def _spin(lo: int, hi: int, val: int) -> QSpinBox:
-    s = QSpinBox()
-    s.setRange(lo, hi)
-    s.setValue(int(val))
-    return s
+    spin = QSpinBox()
+    spin.setRange(lo, hi)
+    spin.setValue(int(val))
+    return spin
 
 
 class SettingsDialog(QDialog):
@@ -32,8 +35,8 @@ class SettingsDialog(QDialog):
         self.state.setCurrentText(cfg.get("ui.dock.state"))
         self.screen = QComboBox()
         self.screen.addItem("Αυτόματη (όπου βρίσκεται)", "auto")
-        for i, s in enumerate(QGuiApplication.screens()):
-            self.screen.addItem(f"{i}: {s.name()} ({s.geometry().width()}x{s.geometry().height()})", i)
+        for index, screen in enumerate(QGuiApplication.screens()):
+            self.screen.addItem(f"{index}: {screen.name()} ({screen.geometry().width()}x{screen.geometry().height()})", index)
         idx = self.screen.findData(cfg.get("ui.screen", "auto"))
         self.screen.setCurrentIndex(max(0, idx))
         self.ontop = QCheckBox("Always on top"); self.ontop.setChecked(cfg.get("ui.always_on_top"))
@@ -47,14 +50,14 @@ class SettingsDialog(QDialog):
         self.fx, self.fy = _spin(-10000, 20000, fl.get("x", 100)), _spin(-10000, 20000, fl.get("y", 100))
         self.fw, self.fh = _spin(120, 5000, 380), _spin(40, 5000, 260)
         f2.addRow("x", self.fx); f2.addRow("y", self.fy); f2.addRow("πλάτος", self.fw); f2.addRow("ύψος", self.fh)
-        cur = QPushButton("Πάρε τρέχουσα θέση/μέγεθος"); cur.clicked.connect(self._take_current)
-        f2.addRow(cur); g2.setLayout(f2); lay.addWidget(g2)
+        current = QPushButton("Πάρε τρέχουσα θέση/μέγεθος"); current.clicked.connect(self._take_current)
+        f2.addRow(current); g2.setLayout(f2); lay.addWidget(g2)
 
         # --- Dock ---
-        d = cfg.get("ui.dock")
+        dock = cfg.get("ui.dock")
         g3, f3 = QGroupBox("Dock (το πάχος αλλάζει και σέρνοντας τη λαβή στην εσωτερική άκρη)"), QFormLayout()
         self.th = _spin(60, 3000, 360)
-        self.ms, self.me = _spin(0, 5000, d["margin_start"]), _spin(0, 5000, d["margin_end"])
+        self.ms, self.me = _spin(0, 5000, dock["margin_start"]), _spin(0, 5000, dock["margin_end"])
         f3.addRow("Πάχος (πλάτος αν αριστ./δεξιά, ύψος αν πάνω/κάτω)", self.th)
         f3.addRow("Περιθώριο αρχής (πάνω ή αριστερά)", self.ms)
         f3.addRow("Περιθώριο τέλους (κάτω ή δεξιά)", self.me)
@@ -65,75 +68,167 @@ class SettingsDialog(QDialog):
         self._refresh_mode_fields(self.mode.currentText())
 
         # --- Κουμπιά ---
-        g4, l4 = QGroupBox("Κουμπιά λωρίδας"), QHBoxLayout()
+        g4, layout4 = QGroupBox("Κουμπιά λωρίδας"), QHBoxLayout()
         self.btn_checks: dict[str, QCheckBox] = {}
-        for b in cfg.get("ui.buttons"):
-            c = QCheckBox(b["id"]); c.setChecked(b.get("enabled", True))
-            self.btn_checks[b["id"]] = c; l4.addWidget(c)
+        for button in cfg.get("ui.buttons"):
+            check = QCheckBox(button["id"]); check.setChecked(button.get("enabled", True))
+            self.btn_checks[button["id"]] = check; layout4.addWidget(check)
         self.sysbtn = QCheckBox("📌 ◧ ⚙"); self.sysbtn.setChecked(cfg.get("ui.show_system_buttons"))
-        l4.addWidget(self.sysbtn); g4.setLayout(l4); lay.addWidget(g4)
+        layout4.addWidget(self.sysbtn); g4.setLayout(layout4); lay.addWidget(g4)
 
-        # --- Quick actions / Windows ---
+        # --- Γρήγορες ενέργειες / Windows ---
         g5, f5 = QGroupBox("Γρήγορες ενέργειες & Windows"), QFormLayout()
         self.dl = QLineEdit(cfg.get("quick_actions.downloads_path"))
         self.urls = QLineEdit(" ".join(cfg.get("quick_actions.browser_urls")))
         self.auto = QCheckBox("Εκκίνηση με τα Windows"); self.auto.setChecked(cfg.get("autostart"))
         f5.addRow("Φάκελος Downloads (κενό=προεπιλογή)", self.dl)
         f5.addRow("Σελίδες browser (με κενό)", self.urls); f5.addRow(self.auto)
-        sc = QPushButton("Δημιουργία συντόμευσης επιφάνειας εργασίας"); sc.clicked.connect(self._shortcut)
-        f5.addRow(sc); g5.setLayout(f5); lay.addWidget(g5)
+        shortcut = QPushButton("Δημιουργία συντόμευσης επιφάνειας εργασίας")
+        shortcut.clicked.connect(self._shortcut)
+        f5.addRow(shortcut); g5.setLayout(f5); lay.addWidget(g5)
+
+        # --- Φωνητικές εντολές ---
+        g6, layout6 = QGroupBox("Φωνητικές εντολές"), QVBoxLayout()
+        command_row = QHBoxLayout()
+        self.cmd_enabled = QCheckBox("Ενεργές")
+        self.cmd_enabled.setChecked(cfg.get("commands.enabled", True))
+        self.cmd_mode = QComboBox()
+        for value, label_text in (("auto", "Αυτόματο"), ("text_only", "Μόνο κείμενο"),
+                                  ("commands_only", "Μόνο εντολές")):
+            self.cmd_mode.addItem(label_text, value)
+        self.cmd_mode.setCurrentIndex(max(0, self.cmd_mode.findData(cfg.get("commands.mode", "auto"))))
+        self.cmd_threshold = _spin(50, 100, int(cfg.get("commands.threshold", 80)))
+        command_row.addWidget(self.cmd_enabled); command_row.addWidget(QLabel("Λειτουργία:"))
+        command_row.addWidget(self.cmd_mode); command_row.addWidget(QLabel("Κατώφλι:"))
+        command_row.addWidget(self.cmd_threshold); command_row.addStretch(1)
+        layout6.addLayout(command_row)
+
+        self.cmd_table = QTableWidget(0, 6)
+        self.cmd_table.setHorizontalHeaderLabels(
+            ["Ενεργή", "Εντολή", "Φράσεις (;)", "Ενέργειες (κόμμα)", "Άμεση", "Ήχος"])
+        self.cmd_table.horizontalHeader().setStretchLastSection(True)
+        layout6.addWidget(self.cmd_table)
+        self._fill_commands()
+
+        test_row = QHBoxLayout()
+        self.cmd_test = QLineEdit()
+        self.cmd_test.setPlaceholderText("Γράψε φράση για δοκιμή ταύτισης…")
+        test_button = QPushButton("Δοκιμή")
+        test_button.clicked.connect(self._test_command)
+        test_row.addWidget(self.cmd_test, 1); test_row.addWidget(test_button)
+        layout6.addLayout(test_row)
+        g6.setLayout(layout6); lay.addWidget(g6, 1)
 
         self.msg = QLabel("")
-        apply_ = QPushButton("Εφαρμογή & αποθήκευση"); apply_.clicked.connect(self._apply)
-        lay.addWidget(apply_); lay.addWidget(self.msg)
+        apply_button = QPushButton("Εφαρμογή & αποθήκευση")
+        apply_button.clicked.connect(self._apply)
+        lay.addWidget(apply_button); lay.addWidget(self.msg)
+
+    def _fill_commands(self) -> None:
+        """Γεμίζει τον πίνακα εντολών από το config."""
+        items = self.ctx.cfg.get("commands.items", [])
+        self.cmd_table.setRowCount(len(items))
+        for row, item in enumerate(items):
+            enabled = QTableWidgetItem()
+            enabled.setCheckState(Qt.CheckState.Checked if item.get("enabled", True) else Qt.CheckState.Unchecked)
+            immediate = QTableWidgetItem()
+            immediate.setCheckState(Qt.CheckState.Checked if item.get("immediate", False) else Qt.CheckState.Unchecked)
+            sound = QTableWidgetItem()
+            sound.setCheckState(Qt.CheckState.Checked if item.get("sound", False) else Qt.CheckState.Unchecked)
+            values = [
+                enabled,
+                QTableWidgetItem(str(item.get("id", ""))),
+                QTableWidgetItem(";".join(item.get("phrases", []))),
+                QTableWidgetItem(",".join(str(argument) for argument in item.get("args", []))),
+                immediate,
+                sound,
+            ]
+            for column, cell in enumerate(values):
+                self.cmd_table.setItem(row, column, cell)
+
+    def _commands_from_table(self) -> list[dict]:
+        """Διαβάζει τις εντολές από τον πίνακα."""
+        items: list[dict] = []
+        for row in range(self.cmd_table.rowCount()):
+            command_id = self.cmd_table.item(row, 1).text().strip()
+            if not command_id:
+                continue
+            phrases = [phrase.strip() for phrase in self.cmd_table.item(row, 2).text().split(";") if phrase.strip()]
+            args = [argument.strip() for argument in self.cmd_table.item(row, 3).text().split(",") if argument.strip()]
+            items.append({
+                "id": command_id,
+                "enabled": self.cmd_table.item(row, 0).checkState() == Qt.CheckState.Checked,
+                "phrases": phrases,
+                "args": args,
+                "immediate": self.cmd_table.item(row, 4).checkState() == Qt.CheckState.Checked,
+                "sound": self.cmd_table.item(row, 5).checkState() == Qt.CheckState.Checked,
+                "confirm": not self.cmd_table.item(row, 4).checkState() == Qt.CheckState.Checked,
+            })
+        return items
+
+    def _test_command(self) -> None:
+        """Δοκιμή ταύτισης χωρίς εκτέλεση."""
+        try:
+            match = CommandEngine(self.ctx.cfg).match(self.cmd_test.text())
+        except RuntimeError as exc:
+            self.msg.setText(str(exc))
+            return
+        if match is None:
+            self.msg.setText("Δεν βρέθηκε εντολή πάνω από το κατώφλι.")
+        else:
+            self.msg.setText(f"Εντολή: {match.command.get('id', '')} · φράση: {match.phrase} · {match.score:.0f}%")
 
     def _refresh_mode_fields(self, mode: str) -> None:
-        """Γεμίζει μέγεθος/πάχος του επιλεγμένου mode· στο buttons είναι αυτόματα (απενεργοποιημένα)."""
+        """Γεμίζει μέγεθος/πάχος του επιλεγμένου mode· στο buttons είναι αυτόματα."""
         cfg = self.ctx.cfg
-        auto = mode == "buttons"
-        for w in (self.fw, self.fh, self.th):
-            w.setEnabled(not auto)
-        self.auto_note.setVisible(auto)
-        if not auto:
-            w, h = float_size(cfg.get("ui.float", {}), mode)
-            self.fw.setValue(w); self.fh.setValue(h)
+        automatic = mode == "buttons"
+        for widget in (self.fw, self.fh, self.th):
+            widget.setEnabled(not automatic)
+        self.auto_note.setVisible(automatic)
+        if not automatic:
+            width, height = float_size(cfg.get("ui.float", {}), mode)
+            self.fw.setValue(width); self.fh.setValue(height)
             self.th.setValue(thickness_for(cfg.get("ui.dock.thickness"), mode))
 
     def _take_current(self) -> None:
-        g = self.shell.geometry()
-        self.fx.setValue(g.x()); self.fy.setValue(g.y())
+        geometry = self.shell.geometry()
+        self.fx.setValue(geometry.x()); self.fy.setValue(geometry.y())
         if self.mode.currentText() != "buttons":
-            self.fw.setValue(g.width()); self.fh.setValue(g.height())
+            self.fw.setValue(geometry.width()); self.fh.setValue(geometry.height())
 
     def _shortcut(self) -> None:
         ok = system.create_desktop_shortcut(self.ctx.cfg.root)
         self.msg.setText("Η συντόμευση δημιουργήθηκε." if ok else "Αποτυχία δημιουργίας συντόμευσης (δες logs).")
 
     def _apply(self) -> None:
-        c = self.ctx.cfg
+        cfg = self.ctx.cfg
         mode = self.mode.currentText()
-        c.set("ui.mode", mode); c.set("ui.dock.state", self.state.currentText())
-        c.set("ui.screen", self.screen.currentData())
-        c.set("ui.always_on_top", self.ontop.isChecked())
-        fl = dict(c.get("ui.float", {}))
-        fl["x"], fl["y"] = self.fx.value(), self.fy.value()
+        cfg.set("ui.mode", mode); cfg.set("ui.dock.state", self.state.currentText())
+        cfg.set("ui.screen", self.screen.currentData())
+        cfg.set("ui.always_on_top", self.ontop.isChecked())
+        float_config = dict(cfg.get("ui.float", {}))
+        float_config["x"], float_config["y"] = self.fx.value(), self.fy.value()
         if mode != "buttons":
-            sizes = dict(fl.get("sizes", {}))
+            sizes = dict(float_config.get("sizes", {}))
             sizes[mode] = {"w": self.fw.value(), "h": self.fh.value()}
-            fl["sizes"] = sizes
-            c.set("ui.dock.thickness", with_thickness(c.get("ui.dock.thickness"), mode, self.th.value()))
-        c.set("ui.float", fl)
-        c.set("ui.dock.margin_start", self.ms.value()); c.set("ui.dock.margin_end", self.me.value())
-        c.set("ui.buttons", [{"id": k, "enabled": v.isChecked()} for k, v in self.btn_checks.items()])
-        c.set("ui.show_system_buttons", self.sysbtn.isChecked())
-        c.set("quick_actions.downloads_path", self.dl.text().strip())
-        c.set("quick_actions.browser_urls", self.urls.text().split())
-        if self.auto.isChecked() != c.get("autostart"):
-            ok = system.set_autostart(self.auto.isChecked(), c.root)
+            float_config["sizes"] = sizes
+            cfg.set("ui.dock.thickness", with_thickness(cfg.get("ui.dock.thickness"), mode, self.th.value()))
+        cfg.set("ui.float", float_config)
+        cfg.set("ui.dock.margin_start", self.ms.value()); cfg.set("ui.dock.margin_end", self.me.value())
+        cfg.set("ui.buttons", [{"id": key, "enabled": check.isChecked()} for key, check in self.btn_checks.items()])
+        cfg.set("ui.show_system_buttons", self.sysbtn.isChecked())
+        cfg.set("quick_actions.downloads_path", self.dl.text().strip())
+        cfg.set("quick_actions.browser_urls", self.urls.text().split())
+        cfg.set("commands.enabled", self.cmd_enabled.isChecked())
+        cfg.set("commands.mode", self.cmd_mode.currentData())
+        cfg.set("commands.threshold", self.cmd_threshold.value())
+        cfg.set("commands.items", self._commands_from_table())
+        if self.auto.isChecked() != cfg.get("autostart"):
+            ok = system.set_autostart(self.auto.isChecked(), cfg.root)
             if ok:
-                c.set("autostart", self.auto.isChecked())
+                cfg.set("autostart", self.auto.isChecked())
             else:
-                self.msg.setText("Αποτυχία autostart."); self.auto.setChecked(c.get("autostart"))
-        c.save()
+                self.msg.setText("Αποτυχία autostart."); self.auto.setChecked(cfg.get("autostart"))
+        cfg.save()
         self.shell.rebuild()
         self.msg.setText("Αποθηκεύτηκε.")
