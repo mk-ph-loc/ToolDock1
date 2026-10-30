@@ -1,11 +1,11 @@
-# CODE-MAP v0.2.0
+# CODE-MAP v0.3.0
 - `tooldock.pyw`, `__main__.py` → `app.main()`: config, logging, single instance, plugins, tray και Shell.
-- `core/config.py`: DEFAULTS, Config, config v3 και migration. `core/geometry.py`: καθαρή γεωμετρία dock/float. `core/storage.py`: Base/θέματα. `core/textnorm.py`, `core/system.py`: κανονικοποίηση και Windows ενέργειες.
-- `core/events.py`: note_saved, activity, status και recognized. Το recognized μεταφέρει κείμενο STT προς το NotesPlugin.
-- `speech/base.py`: Audio, Provider, SttError, κωδικοί γλώσσας. `vad.py`: RMS και σιωπή. `registry.py`: SpeechService, lazy providers, σειρά/fallback/cache.
-- `speech/google.py`: Google Web Speech. `whisper_local.py`: lazy faster-whisper. `devices.py`: όνομα+host API → τρέχον index. `recorder.py`: mono int16 λήψη, συμβατότητα εισόδου και σφάλματα.
+- `core/config.py`: DEFAULTS, Config, config v4 και migration. `core/geometry.py`: καθαρή γεωμετρία dock/float. `core/storage.py`: Base/θέματα. `core/textnorm.py`, `core/system.py`: κανονικοποίηση και Windows ενέργειες.
+- `core/commands.py`: CommandEngine. Lazy/προαιρετικό rapidfuzz, `partial_ratio` με κατώφλι, εκτέλεση ως λίστα ορισμάτων χωρίς shell. Placeholders: `{downloads}`, `{base}`, `{browser}`.
+- `core/events.py`: note_saved, activity, status και recognized.
+- `speech/`: base, vad, registry, google, whisper_local, devices, recorder (βλ. v0.2.0).
 - `tools/base.py`: Plugin/Action. `tools/__init__.py`: φόρτωση μόνο ενεργών plugins.
-- `tools/dictation/plugin.py`: μικρόφωνο, επιλογείς, worker/GUI bridge, buttons→compact, αποτελέσματα στο recognized. Χωρίς notes κρατά δικό του επεξεργάσιμο πεδίο.
-- `tools/notes/plugin.py`: κοινό πρόχειρο μεταξύ modes, recognized→κείμενο, OK/Enter→clipboard/Storage, Shift+Enter→νέα γραμμή.
-- `ui/shell.py`: modes/dock/οθόνη/Grip/status. `ui/settings.py`: βασικές ρυθμίσεις. Το dictation widget δεν επεκτείνεται κατακόρυφα όταν το πεδίο το παρέχει το notes.
-- Tests STT: test_speech_vad/service/devices/ui, test_config_v3, test_dictation_layout. Αναφορά χρήστη: 56 passed στο d6bfe88.
+- `tools/dictation/plugin.py`: μικρόφωνο, worker/GUI bridge, ταύτιση εντολών (Αυτόματο / Μόνο κείμενο / Μόνο εντολές), άμεση εκτέλεση ή αναμονή OK, ήχος ανά εντολή.
+- `tools/notes/plugin.py`: κοινό πρόχειρο, OK/Enter· πρώτα εκτελεί εντολή σε αναμονή (`ctx.command_runner`), αλλιώς αποθηκεύει σημείωση.
+- `ui/shell.py`: modes/dock/οθόνη/Grip/status. `ui/settings.py`: ρυθμίσεις και επεξεργαστής εντολών (πίνακας, Προσθήκη/Διαγραφή, Δοκιμή· διαχωριστής `;` για φράσεις και ορίσματα).
+- Tests S3: `tests/test_commands.py` (skip των ταυτίσεων αν λείπει rapidfuzz).

@@ -46,7 +46,7 @@ class CommandEngine:
             if not command.get("enabled", True):
                 continue
             for phrase in command.get("phrases", []):
-                score = float(fuzz.partial_ratio(normalize(str(phrase)), norm))
+                score = float(fuzz.partial_ratio(normalize(str(phrase)), normalize(str(phrase))))
                 if score >= threshold and (best is None or score > best.score):
                     best = CommandMatch(command, str(phrase), score)
         return best
@@ -58,19 +58,18 @@ class CommandEngine:
             return False
         if args[0] == "{browser}":
             from tooldock.core.system import open_urls
-            open_urls([str(argument) for argument in args[1:]],
-                      str(self.cfg.get("quick_actions.browser_exe", "")))
+            open_urls(args[1:], normalize(self.cfg.get("quick_actions.browser_exe", "")))
             return True
         # ΠΡΟΣΟΧΗ: τα ορίσματα προέρχονται από το config.json του χρήστη.
-        subprocess.Popen(args, cwd=str(self.cfg.root))
+        subprocess.Popen(args, cwd=normalize(self.cfg.root))
         return True
 
-    def _resolve(self, argument: str | object) -> str:
+    def _resolve(self, argument: object) -> str:
         """Μετατρέπει ειδικά placeholders σε πραγματικά paths."""
-        value = str(argument)
+        value = normalize(argument)
         if value == "{downloads}":
             from tooldock.core.system import downloads_dir
-            return str(downloads_dir(self.cfg))
+            return downloads_dir(self.cfg)
         if value == "{base}":
-            return str(self.cfg.data_dir / self.cfg.get("notes.base_file", "Base.txt"))
+            return normalize(self.cfg.data_dir / self.cfg.get("notes.base_file", "Base.txt"))
         return value

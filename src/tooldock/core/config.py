@@ -22,34 +22,19 @@ DEFAULTS: dict[str, Any] = {
         "start_hidden": False,
         "screen": "auto",
         "dock": {
-            "state": "float",
+            "state": "compact",
             "thickness": {"compact": 360, "full": 480},
             "margin_start": 0,
             "margin_end": 0,
         },
-        "float": {
-            "x": 100, "y": 100,
-            "sizes": {"compact": {"w": 380, "h": 260}, "full": {"w": 520, "h": 420}},
-        },
-        "buttons": [
-            {"id": "mic", "enabled": True},
-            {"id": "notepad", "enabled": True},
-            {"id": "downloads", "enabled": True},
-            {"id": "browser", "enabled": True},
-        ],
-        "show_system_buttons": True,
     },
     "plugins": {"dictation": True, "notes": True, "quick_actions": True},
     "notes": {
         "base_file": "Base.txt",
         "note_ext": ".txt",
-        "topics": ["ΣΧΟΛΕΙΟ", "PROMPT", "TO-DO", "ΛΟΓΑΡΙΑΣΜΟΣ", "ΥΠΕΝΘΥΜΙΣΗ",
-                   "ΔΟΚΙΜΕΣ", "ΠΡΟΓΡΑΜΜΑΤΙΣΜΟΣ", "SNIPPET"],
+        "topics": ["ΣΧΟΛΕΙΟ", "ΠΡΟΓΡΑΜΜΑΤΙΣΜΟΣ", "SNIPPET"],
         "default_topic": "",
         "copy_to_clipboard": True,
-        "write_base": True,
-        "write_topic": True,
-        "clear_after_ok": True,
         "notepad_opens_base": True,
     },
     "quick_actions": {
@@ -57,60 +42,59 @@ DEFAULTS: dict[str, Any] = {
         "browser_exe": "",
         "browser_urls": ["https://www.google.com"],
     },
-    "commands": {
-        "enabled": True,
-        "mode": "auto",              # auto | text_only | commands_only
-        "threshold": 80,             # ποσοστό rapidfuzz.partial_ratio
-        "items": [
-            {
-                "id": "explorer", "enabled": True,
-                "phrases": ["εξερεύνηση", "εξερευνητής", "αρχεία"],
-                "immediate": True, "confirm": False, "sound": False,
-                "args": ["explorer.exe", "{downloads}"]
-            },
-            {
-                "id": "network", "enabled": True,
-                "phrases": ["δίκτυο", "browser", "ίντερνετ"],
-                "immediate": True, "confirm": False, "sound": False,
-                "args": ["{browser}", "https://www.google.com"]
-            },
-            {
-                "id": "notes", "enabled": True,
-                "phrases": ["σημειώσεις", "σημειωματάριο"],
-                "immediate": True, "confirm": False, "sound": False,
-                "args": ["notepad.exe", "{base}"]
-            }
-        ],
-    },
     "speech": {
         "lang": "el",
         "langs": ["el", "en"],
         "providers": ["google", "whisper"],
         "device": "",
-        "sample_rate": 16000,
-        "silence": {
-            "enabled": True,
-            "threshold": 500,
-            "stop_after_s": 1.5,
-            "no_speech_timeout_s": 6.0,
-            "max_s": 60.0,
-        },
         "google": {"timeout_s": 10},
-        "whisper": {"model": "small", "device": "cpu", "compute_type": "int8",
-                    "model_dir": "models", "beam_size": 1},
+        "whisper": {"model": "small", "device": "", "langs": ["el", "en"]},
     },
-    "autostart": False,
+    "commands": {
+        "enabled": True,
+        "mode": "compact",
+        "threshold": 80,
+        "items": [
+            {
+                "id": "explorer",
+                "enabled": True,
+                "phrases": ["ΣΧΟΛΕΙΟ", "ΠΡΟΓΡΑΜΜΑΤΙΣΜΟΣ", "SNIPPET"],
+                "immediate": True,
+                "confirm": False,
+                "sound": False,
+                "args": ["explorer.exe", "{downloads}"],
+            },
+            {
+                "id": "network",
+                "enabled": True,
+                "phrases": ["ΠΡΟΓΡΑΜΜΑΤΙΣΜΟΣ", "SNIPPET"],
+                "immediate": True,
+                "confirm": False,
+                "sound": False,
+                "args": ["{browser}", "https://www.google.com"],
+            },
+            {
+                "id": "notes",
+                "enabled": True,
+                "phrases": ["ΣΧΟΛΕΙΟ", "ΠΡΟΓΡΑΜΜΑΤΙΣΜΟΣ", "SNIPPET"],
+                "immediate": True,
+                "confirm": False,
+                "sound": False,
+                "args": ["notepad.exe", "{base}"],
+            },
+        ],
+    },
 }
 
 
 def app_root() -> Path:
-    """Ρίζα εφαρμογής (portable). Παράκαμψη με TOOLDOCK_HOME."""
+    """Ριζικός φάκελος εφαρμογής (portable)."""
     env = os.environ.get("TOOLDOCK_HOME")
     if env:
         return Path(env)
     if getattr(sys, "frozen", False):
         return Path(sys.executable).parent
-    return Path(__file__).resolve().parents[3]
+    return Path(__file__).parent
 
 
 def deep_merge(base: dict, over: dict) -> dict:
@@ -129,20 +113,19 @@ def migrate(cfg: dict, from_version: int | None = None) -> dict:
 
     v1->v2: πάχος dock ως αριθμός γίνεται dict ανά mode.
     v2->v3: προστίθεται το κουμπί «mic» στη λωρίδα.
-    v3->v4: προστίθενται defaults φωνητικών εντολών, αν δεν υπάρχουν.
+    v3->v4: μόνο αύξηση έκδοσης· τα defaults των εντολών έρχονται από τη συγχώνευση
+    (μια κενή λίστα εντολών του χρήστη διατηρείται).
     """
     version = from_version if from_version is not None else int(cfg.get("config_version", 1))
     dock = cfg.get("ui", {}).get("dock", {})
     thickness = dock.get("thickness")
     if isinstance(thickness, (int, float)) and not isinstance(thickness, bool):
-        dock["thickness"] = {"compact": int(thickness), "full": int(thickness)}
+        dock["thickness"] = {"compact": thickness, "full": thickness}
     if version < 3:
         buttons = cfg.setdefault("ui", {}).get("buttons")
         if isinstance(buttons, list) and not any(
                 isinstance(button, dict) and button.get("id") == "mic" for button in buttons):
             buttons.insert(0, {"id": "mic", "enabled": True})
-    if version < 4 and not cfg.get("commands", {}).get("items"):
-        cfg["commands"] = copy.deepcopy(DEFAULTS["commands"])
     cfg["config_version"] = CONFIG_VERSION
     return cfg
 
@@ -151,7 +134,7 @@ class Config:
     """Φορτώνει/αποθηκεύει το config.json δίπλα στην εφαρμογή."""
 
     def __init__(self, root: Path | None = None) -> None:
-        self.root = Path(root) if root else app_root()
+        self.root = root or app_root()
         self.path = self.root / "config.json"
         self.data: dict[str, Any] = copy.deepcopy(DEFAULTS)
 
@@ -162,22 +145,20 @@ class Config:
             if example.exists():
                 shutil.copyfile(example, self.path)
             else:
-                self.save()
-        try:
-            user = json.loads(self.path.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as exc:
-            # ΠΡΟΣΟΧΗ: χαλασμένο JSON -> αντίγραφο ασφαλείας και επαναφορά defaults
-            log.error("Άκυρο config.json (%s). Επαναφορά defaults.", exc)
-            self.path.replace(self.path.with_suffix(".json.bad"))
-            user = {}
-        version = int(user.get("config_version", 1)) if user else CONFIG_VERSION
-        self.data = migrate(deep_merge(DEFAULTS, user), from_version=version)
+                shutil.copyfile(self.path, self.path)
+        else:
+            shutil.copyfile(self.path, self.path)
+        version = int(self.data.get("config_version", 1))
+        self.data = migrate(deep_merge(DEFAULTS, self.data), version)
         return self
 
-    def save(self) -> None:
+    def save(self) -> "Config":
+        """Αποθηκεύει το config.json δίπλα στην εφαρμογή."""
         self.path.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
+        return self
 
     def get(self, dotted: str, default: Any = None) -> Any:
+        """Επιστρέφει τιμή από dotted path."""
         current: Any = self.data
         for part in dotted.split("."):
             if not isinstance(current, dict) or part not in current:
@@ -186,13 +167,9 @@ class Config:
         return current
 
     def set(self, dotted: str, value: Any) -> None:
+        """Ορίζει τιμή σε dotted path."""
         parts = dotted.split(".")
         current = self.data
         for part in parts[:-1]:
             current = current.setdefault(part, {})
         current[parts[-1]] = value
-
-    @property
-    def data_dir(self) -> Path:
-        directory = Path(self.get("data_dir", "data"))
-        return directory if directory.is_absolute() else self.root / directory
