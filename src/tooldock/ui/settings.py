@@ -105,10 +105,20 @@ class SettingsDialog(QDialog):
 
         self.cmd_table = QTableWidget(0, 6)
         self.cmd_table.setHorizontalHeaderLabels(
-            ["Ενεργή", "Εντολή", "Φράσεις (;)", "Ενέργειες (κόμμα)", "Άμεση", "Ήχος"])
+            ["Ενεργή", "Εντολή", "Φράσεις (;)", "Ενέργειες (;)", "Άμεση", "Ήχος"])
         self.cmd_table.horizontalHeader().setStretchLastSection(True)
         layout6.addWidget(self.cmd_table)
         self._fill_commands()
+
+        command_buttons = QHBoxLayout()
+        add_command = QPushButton("Προσθήκη εντολής")
+        add_command.clicked.connect(self._add_command)
+        delete_command = QPushButton("Διαγραφή επιλεγμένης")
+        delete_command.clicked.connect(self._delete_command)
+        command_buttons.addWidget(add_command)
+        command_buttons.addWidget(delete_command)
+        command_buttons.addStretch(1)
+        layout6.addLayout(command_buttons)
 
         test_row = QHBoxLayout()
         self.cmd_test = QLineEdit()
@@ -118,6 +128,12 @@ class SettingsDialog(QDialog):
         test_row.addWidget(self.cmd_test, 1); test_row.addWidget(test_button)
         layout6.addLayout(test_row)
         g6.setLayout(layout6); lay.addWidget(g6, 1)
+
+        if not CommandEngine(cfg).available():
+            warning = QLabel("Προειδοποίηση: το rapidfuzz δεν είναι εγκατεστημένο. "
+                             "Εγκατάσταση: pip install -r requirements-commands.txt")
+            warning.setWordWrap(True)
+            lay.addWidget(warning)
 
         self.msg = QLabel("")
         apply_button = QPushButton("Εφαρμογή & αποθήκευση")
@@ -133,13 +149,14 @@ class SettingsDialog(QDialog):
             enabled.setCheckState(Qt.CheckState.Checked if item.get("enabled", True) else Qt.CheckState.Unchecked)
             immediate = QTableWidgetItem()
             immediate.setCheckState(Qt.CheckState.Checked if item.get("immediate", False) else Qt.CheckState.Unchecked)
+            immediate.setToolTip("Αν ενεργό, η εντολή εκτελείται αμέσως μετά την ταύτιση, χωρίς OK.")
             sound = QTableWidgetItem()
             sound.setCheckState(Qt.CheckState.Checked if item.get("sound", False) else Qt.CheckState.Unchecked)
             values = [
                 enabled,
                 QTableWidgetItem(str(item.get("id", ""))),
                 QTableWidgetItem(";".join(item.get("phrases", []))),
-                QTableWidgetItem(",".join(str(argument) for argument in item.get("args", []))),
+                QTableWidgetItem(";".join(str(argument) for argument in item.get("args", []))),
                 immediate,
                 sound,
             ]
@@ -154,7 +171,7 @@ class SettingsDialog(QDialog):
             if not command_id:
                 continue
             phrases = [phrase.strip() for phrase in self.cmd_table.item(row, 2).text().split(";") if phrase.strip()]
-            args = [argument.strip() for argument in self.cmd_table.item(row, 3).text().split(",") if argument.strip()]
+            args = [argument.strip() for argument in self.cmd_table.item(row, 3).text().split(";") if argument.strip()]
             items.append({
                 "id": command_id,
                 "enabled": self.cmd_table.item(row, 0).checkState() == Qt.CheckState.Checked,
@@ -165,6 +182,29 @@ class SettingsDialog(QDialog):
                 "confirm": not self.cmd_table.item(row, 4).checkState() == Qt.CheckState.Checked,
             })
         return items
+
+    def _add_command(self) -> None:
+        """Προσθέτει κενή εγγραφή εντολής στον πίνακα."""
+        row = self.cmd_table.rowCount()
+        self.cmd_table.insertRow(row)
+        enabled = QTableWidgetItem()
+        enabled.setCheckState(Qt.CheckState.Checked)
+        immediate = QTableWidgetItem()
+        immediate.setCheckState(Qt.CheckState.Unchecked)
+        immediate.setToolTip("Αν ενεργό, η εντολή εκτελείται αμέσως μετά την ταύτιση, χωρίς OK.")
+        sound = QTableWidgetItem()
+        sound.setCheckState(Qt.CheckState.Unchecked)
+        values = [enabled, QTableWidgetItem(f"command_{row + 1}"), QTableWidgetItem(),
+                  QTableWidgetItem(), immediate, sound]
+        for column, cell in enumerate(values):
+            self.cmd_table.setItem(row, column, cell)
+        self.cmd_table.setCurrentCell(row, 1)
+
+    def _delete_command(self) -> None:
+        """Διαγράφει την επιλεγμένη εγγραφή εντολής."""
+        row = self.cmd_table.currentRow()
+        if row >= 0:
+            self.cmd_table.removeRow(row)
 
     def _test_command(self) -> None:
         """Δοκιμή ταύτισης χωρίς εκτέλεση."""

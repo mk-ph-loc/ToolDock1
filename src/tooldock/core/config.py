@@ -59,8 +59,8 @@ DEFAULTS: dict[str, Any] = {
     },
     "commands": {
         "enabled": True,
-        "mode": "auto",              # auto | text_only | commands_only
-        "threshold": 80,             # ποσοστό rapidfuzz.partial_ratio
+        "mode": "auto",
+        "threshold": 80,
         "items": [
             {
                 "id": "explorer", "enabled": True,
@@ -141,8 +141,11 @@ def migrate(cfg: dict, from_version: int | None = None) -> dict:
         if isinstance(buttons, list) and not any(
                 isinstance(button, dict) and button.get("id") == "mic" for button in buttons):
             buttons.insert(0, {"id": "mic", "enabled": True})
-    if version < 4 and not cfg.get("commands", {}).get("items"):
-        cfg["commands"] = copy.deepcopy(DEFAULTS["commands"])
+    if version < 4:
+        commands = cfg.setdefault("commands", {})
+        # ΠΡΟΣΟΧΗ: κενή λίστα items είναι σκόπιμη επιλογή και διατηρείται.
+        if "items" not in commands:
+            commands["items"] = copy.deepcopy(DEFAULTS["commands"]["items"])
     cfg["config_version"] = CONFIG_VERSION
     return cfg
 
