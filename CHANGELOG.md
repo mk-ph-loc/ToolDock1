@@ -1,4 +1,16 @@
 # Changelog
+## [v0.2.1] — 2026-10-30
+### Αλλαγές / διορθώσεις
+- release.ps1: τρέχει μόνο από καθαρό, ενημερωμένο main (ίδιο SHA με `github/main`).
+- release.ps1: απαιτούμενα remotes από `release.required_remotes` στο config.json (default `github`). Το Gitea/`origin` δεν απαιτείται πλέον.
+- release.ps1: commit μόνο για tracked αρχεία (`git add -u`), αποτυχία αν υπάρχουν untracked αρχεία.
+- release.ps1: επαλήθευση ύπαρξης zip και tag στο κάθε remote μετά το push, με σωστό exit code σε αποτυχία.
+- release.ps1: idempotent tag — αν το tag υπάρχει στο ίδιο commit, συνεχίζει· σε άλλο commit, αποτυγχάνει.
+### Έλεγχοι
+- Χρήστης, Windows: 56 passed στο v0.2.0 (d6bfe88). Τα v0.2.1 tests εκτελούνται πριν το release.
+### Γνωστά θέματα
+- Τα χειροκίνητα items 6–10 του TESTS.md (v0.2.0) παραμένουν προς επιβεβαίωση από τον χρήστη.
+
 ## [v0.2.0] — 2026-10-30
 ### Νέα
 - Υπαγόρευση (plugin `dictation`, on/off): ένα κουμπί 🎤 στη λωρίδα, έναρξη και χειροκίνητο στοπ.

@@ -1,6 +1,9 @@
 {
   "config_version": 3,
   "data_dir": "data",
+  "release": {
+    "required_remotes": ["github"]
+  },
   "ui": {
     "mode": "compact",
     "always_on_top": true,

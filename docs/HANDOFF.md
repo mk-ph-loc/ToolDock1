@@ -1,16 +1,22 @@
-# HANDOFF — ToolDock v0.2.0
-Ενημέρωση: 2026-10-30. Branch ai/v0.2.0, PR #1. Ελεγμένος κώδικας: d6bfe882eb2c5578469f388ea80d92fd1fd83f18.
+# HANDOFF — ToolDock v0.2.1
+Ενημέρωση: 2026-10-30. Branch ai/v0.2.1, PR προς main. Βάση: main `1d2a0d5d70fe74e095d95ba9309c707d4cf6b781` (2026-10-29 23:18 UTC).
 
 ## Κατάσταση
-- Χρήστης στα Windows: 56 passed in 0.52s στο τελικό patch και οπτικό ΟΚ για το ύψος μικροφώνου.
-- Επιβεβαιώθηκαν Google online, Whisper και αυτόματο offline fallback.
-- Κώδικας S2: μικρόφωνο ανά host API, el/en, worker, κοινό πεδίο notes/OK, buttons→compact, status, lazy προαιρετικές εξαρτήσεις.
-- Τα κενά checklist items της v0.1.1 και οι μη επιβεβαιωμένες επιμέρους hardware/UI περιπτώσεις δεν μετατράπηκαν σε ✅. Βλ. TESTS.md.
+- Το PR #1 (v0.2.0) έγινε merge. Το tag `v0.2.0` δείχνει στο `1d2a0d5`.
+- Το zip `dist\tooldock-v0.2.0.zip` (70.980 bytes) αναφέρθηκε από τον χρήστη· δεν επαληθεύτηκε από το AI (το dist/ δεν είναι στο repo).
+- Το Gitea/`origin` αφαιρέθηκε από τις απαιτήσεις. Απαιτούμενο remote πλέον μόνο `github`, ρυθμιζόμενο στο `release.required_remotes`.
 
-## Υπολειπόμενα παράδοσης
-Το παρόν commit αλλάζει μόνο τεκμηρίωση. Merge/tag/release δεν εκτελέστηκαν από το AI.
-Ο χρήστης ελέγχει το PR #1 και κάνει merge. Έπειτα main → pull από το GitHub remote → scripts/release.ps1, χωρίς bump. Το script ξανατρέχει tests, φτιάχνει dist/tooldock-v0.2.0.zip με εσωτερικό φάκελο tooldock, tag και push στα origin/github. Έλεγξε την τελική επιτυχία και των δύο remotes.
-Δεν έχει δημιουργηθεί/παραδοθεί πλήρες zip από το AI. Αντίγραφα docs στα Project files εκκρεμούν· η ενημερωμένη αλήθεια είναι στο branch του repo.
+## Τι έγινε στο v0.2.1
+- Θωράκιση του `scripts/release.ps1`: μόνο καθαρό και ενημερωμένο main, έλεγχος SHA με `github/main`, `git add -u`, αποτυχία σε untracked, έλεγχος zip, idempotent tag, push και επαλήθευση tag ανά remote, σωστό exit code.
+- `config.example.json`: νέα ενότητα `release.required_remotes` = `["github"]`.
+- VERSION → 0.2.1, CHANGELOG, DECISIONS (Δ27–Δ29), report, TESTS, HANDOFF, NEXT-CHAT-PROMPT.
+
+## Επόμενα βήματα χρήστη
+1. Έλεγξε το PR και κάνε merge.
+2. `git switch main; git pull github main`
+3. `./scripts/release.ps1 -Message "θωράκιση release"` χωρίς bump (το VERSION είναι ήδη 0.2.1).
+4. Επιβεβαίωσε: tests πέρασαν, zip δημιουργήθηκε, tag `v0.2.1` εμφανίζεται στο GitHub.
+5. Συμπλήρωσε τα χειροκίνητα items 6–10 του TESTS.md (v0.2.0) όταν τα ελέγξεις.
 
 ## Επόμενη συνεδρία
-Νέα συνομιλία για S3/v0.3.0 μόνο μετά την επιβεβαίωση merge/release. Αρχή με πραγματικό main SHA/ημερομηνία, έλεγχο HANDOFF/ROADMAP/TESTS και branch ai/v0.3.0 + PR. Δεν απαιτείται Opus για S3. Όχι νέα έκδοση πριν λυθεί τυχόν αποτυχία release.
+S3/v0.3.0: rapidfuzz, τρεις εντολές, άμεση/επιβεβαίωση/ήχος, επεξεργαστής. Branch `ai/v0.3.0` + PR. Καμία αλλαγή main ή tags από AI. Δεν απαιτείται Opus.

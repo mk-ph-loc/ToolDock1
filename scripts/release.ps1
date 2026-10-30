@@ -1,5 +1,5 @@
 <#
-.SYNOPSIS  tests -> zip -> commit -> tag -> push (origin + github). Χρήση:
+.SYNOPSIS  tests -> zip -> commit -> tag -> push (required remotes). Χρήση:
   .\scripts\release.ps1 -Message "περιγραφή"            # χρησιμοποιεί το VERSION όπως είναι
   .\scripts\release.ps1 -Bump minor -Message "..."      # patch | minor | major | none
   Τρέχε το από το main, αφού έχεις κάνει merge το branch του AI.
@@ -12,7 +12,26 @@ $project = "tooldock"
 function Step($t) { Write-Host "==> $t" -ForegroundColor Cyan }
 function Check($what) { if ($LASTEXITCODE -ne 0) { Write-Host "ΑΠΟΤΥΧΙΑ: $what" -ForegroundColor Red; exit 1 } }
 
-# 1. VERSION
+# 1. Έλεγχοι αποθετηρίου
+Step "Έλεγχος branch/καθαρού δέντρου"
+$branch = (git branch --show-current)
+if ($branch -ne "main") { Write-Host "ΑΠΟΤΥΧΙΑ: Το release τρέχει μόνο από main (βρέθηκε: $branch)." -ForegroundColor Red; exit 1 }
+if (git status --porcelain) { Write-Host "ΑΠΟΤΥΧΙΑ: Υπάρχουν μη δεσμευμένες αλλαγές." -ForegroundColor Red; exit 1 }
+
+Step "git fetch github"
+git fetch github --prune
+Check "git fetch github"
+$local = (git rev-parse HEAD)
+$remote = (git rev-parse "github/main")
+if ($local -ne $remote) { Write-Host "ΑΠΟΤΥΧΙΑ: Το τοπικό main ($local) δεν είναι ίδιο με το github/main ($remote)." -ForegroundColor Red; exit 1 }
+
+# 2. Απαιτούμενα remotes από config.json (default: github)
+$required = @("github")
+if (Test-Path "config.json") {
+  try { $cfg = Get-Content "config.json" -Raw | ConvertFrom-Json; if ($cfg.release.required_remotes) { $required = @($cfg.release.required_remotes) } } catch {}
+}
+
+# 3. VERSION
 $v = (Get-Content VERSION -Raw).Trim()
 if ($Bump -ne "none") {
   $p = $v.Split("."); [int]$ma=$p[0]; [int]$mi=$p[1]; [int]$pa=$p[2]
@@ -21,12 +40,12 @@ if ($Bump -ne "none") {
 }
 Step "Έκδοση v$v"
 
-# 2. tests
+# 4. tests
 Step "pytest"
 & .\.venv\Scripts\python.exe -m pytest -q
 Check "pytest"
 
-# 3. zip
+# 5. zip
 Step "zip"
 $dist = "dist"; $stage = Join-Path $dist "stage"; $dest = Join-Path $stage $project
 Remove-Item $stage -Recurse -Force -ErrorAction SilentlyContinue
@@ -40,11 +59,14 @@ $zip = Join-Path $dist "$project-v$v.zip"
 Remove-Item $zip -ErrorAction SilentlyContinue
 Compress-Archive -Path $dest -DestinationPath $zip
 Remove-Item $stage -Recurse -Force
+if (-not (Test-Path $zip)) { Write-Host "ΑΠΟΤΥΧΙΑ: Δεν δημιουργήθηκε το zip." -ForegroundColor Red; exit 1 }
 Write-Host "   $zip"
 
-# 4. git (commit μόνο αν υπάρχουν αλλαγές· αν έγινε merge έτοιμο, μένει μόνο το tag)
+# 6. git commit μόνο για tracked αλλαγές
 Step "git commit + tag"
-git add -A
+$untracked = git ls-files --others --exclude-standard
+if ($untracked) { Write-Host "ΑΠΟΤΥΧΙΑ: Υπάρχουν untracked αρχεία. Πρόσθεσέ τα ή πρόσθεσέ τα στο .gitignore:" -ForegroundColor Red; $untracked | ForEach-Object { Write-Host "  $_" }; exit 1 }
+git add -u
 git diff --cached --quiet
 if ($LASTEXITCODE -ne 0) {
   git commit -m "v${v}: $Message"
@@ -52,19 +74,32 @@ if ($LASTEXITCODE -ne 0) {
 } else {
   Write-Host "   Καμία νέα αλλαγή για commit."
 }
-git tag "v$v"
-Check "git tag (υπάρχει ήδη;)"
-
-# 5. push
-$ok = @()
-foreach ($r in @("origin", "github")) {
-  if (git remote | Select-String -SimpleMatch -Pattern $r -Quiet) {
-    git push $r HEAD --tags
-    if ($LASTEXITCODE -eq 0) { $ok += "$r ✔" } else { $ok += "$r ✘"; Write-Host "Push στο $r απέτυχε" -ForegroundColor Red }
-  } else { $ok += "$r (δεν υπάρχει remote)" }
+$head = (git rev-parse HEAD)
+$existing = git rev-parse -q --verify "refs/tags/v$v"
+if ($existing) {
+  if ($existing -ne $head) { Write-Host "ΑΠΟΤΥΧΙΑ: Το tag v$v υπάρχει σε άλλο commit ($existing)." -ForegroundColor Red; exit 1 }
+  Write-Host "   Το tag v$v υπάρχει ήδη στο ίδιο commit."
+} else {
+  git tag "v$v"
+  Check "git tag"
 }
 
-# 6. περίληψη
+# 7. push + επαλήθευση
+$ok = @()
+$failed = $false
+foreach ($r in $required) {
+  if (-not (git remote | Where-Object { $_ -eq $r })) {
+    Write-Host "ΑΠΟΤΥΧΙΑ: Λείπει το απαιτούμενο remote '$r'." -ForegroundColor Red; $failed = $true; continue
+  }
+  git push $r HEAD --tags
+  if ($LASTEXITCODE -ne 0) { Write-Host "ΑΠΟΤΥΧΙΑ: Push στο $r." -ForegroundColor Red; $failed = $true; continue }
+  $remoteTag = git ls-remote --tags $r "refs/tags/v$v"
+  if (-not $remoteTag) { Write-Host "ΑΠΟΤΥΧΙΑ: Το tag v$v δεν βρέθηκε στο $r μετά το push." -ForegroundColor Red; $failed = $true; continue }
+  $ok += "$r ✔"
+}
+
+# 8. περίληψη
 Write-Host "`n===== v$v =====" -ForegroundColor Green
 Write-Host "zip : $zip"
 Write-Host ("push: " + ($ok -join " | "))
+if ($failed) { Write-Host "ΑΠΟΤΥΧΙΑ: Ένα ή περισσότερα remotes απέτυχαν." -ForegroundColor Red; exit 1 }
